@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { listSets } from '@/lib/services/catalog';
 
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Set explorer',
   description: 'Browse Pokémon TCG sets, track completion, and value complete sets.',

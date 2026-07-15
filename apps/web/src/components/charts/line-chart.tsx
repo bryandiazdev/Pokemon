@@ -12,6 +12,7 @@ import { fmtMinor } from '@/lib/format';
 export interface SeriesPoint {
   date: string;
   valueMinor: number;
+  currency?: string;
 }
 
 /**

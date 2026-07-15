@@ -45,6 +45,7 @@ interface PtcgPricingCard {
       averageSellPrice?: number | null;
       lowPrice?: number | null;
       trendPrice?: number | null;
+      avg1?: number | null;
       avg7?: number | null;
       avg30?: number | null;
     };
@@ -159,9 +160,38 @@ export function createPokemonTcgRawPricing(
       const prices = normalize(card);
       return input.finish ? prices.filter((p) => !p.finish || p.finish === input.finish) : prices;
     },
-    async getRawPriceHistory(_input: PriceHistoryInput): Promise<NormalizedPricePoint[]> {
-      // This provider exposes no history; charts read our stored daily snapshots.
-      return [];
+    async getRawPriceHistory(input: PriceHistoryInput): Promise<NormalizedPricePoint[]> {
+      // The API has no daily history endpoint, but the Cardmarket block carries
+      // genuine rolling averages (1/7/30-day) + current. We surface those as a
+      // small, HONEST trend (real provider data, not interpolation). Dense daily
+      // history still accumulates via our own price_points snapshots over time.
+      const card = await fetchCard(input.cardExternalId);
+      const cm = card.cardmarket?.prices;
+      if (!cm) return [];
+      const dayMs = 86_400_000;
+      const now = Date.now();
+      const raw: Array<{ offsetDays: number; value: number | null | undefined }> = [
+        { offsetDays: 30, value: cm.avg30 },
+        { offsetDays: 7, value: cm.avg7 },
+        { offsetDays: 1, value: cm.avg1 },
+        { offsetDays: 0, value: cm.averageSellPrice ?? cm.trendPrice },
+      ];
+      const fromMs = input.from ? new Date(input.from).getTime() : 0;
+      const points: NormalizedPricePoint[] = [];
+      for (const { offsetDays, value } of raw) {
+        if (value == null) continue;
+        const ts = now - offsetDays * dayMs;
+        if (ts < fromMs) continue;
+        points.push({
+          date: new Date(ts).toISOString().slice(0, 10),
+          valueMinor: toMinor(value),
+          currency: 'EUR',
+          freshness: 'live',
+        });
+      }
+      // De-dupe identical dates, keep ascending order.
+      const seen = new Set<string>();
+      return points.filter((p) => (seen.has(p.date) ? false : (seen.add(p.date), true)));
     },
   };
 }

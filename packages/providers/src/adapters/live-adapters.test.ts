@@ -20,7 +20,7 @@ const PTCG_CARD = {
     },
     cardmarket: {
       updatedAt: '2024/07/01',
-      prices: { averageSellPrice: 300.5, lowPrice: 210.0, trendPrice: 330.0 },
+      prices: { averageSellPrice: 300.5, lowPrice: 210.0, trendPrice: 330.0, avg1: 305, avg7: 290, avg30: 275 },
     },
   },
 };
@@ -66,13 +66,27 @@ describe('pokemontcg raw pricing adapter', () => {
     expect.assertions(3);
   });
 
-  it('returns empty history (charts use stored snapshots)', async () => {
+  it('builds a real sparse trend from Cardmarket rolling averages', async () => {
     const adapter = createPokemonTcgRawPricing({ fetchImpl: mockFetch(PTCG_CARD) });
     const hist = await adapter.getRawPriceHistory({
       cardExternalId: 'base1-4',
-      from: '2024-01-01',
-      to: '2024-02-01',
+      from: '2000-01-01',
+      to: '2100-01-01',
     });
+    // 4 points: avg30, avg7, avg1, current — ascending, EUR, live, minor units.
+    expect(hist.length).toBe(4);
+    expect(hist[0]!.valueMinor).toBe(27500); // avg30 = €275
+    expect(hist[hist.length - 1]!.valueMinor).toBe(30050); // current €300.50
+    expect(hist.every((p) => p.currency === 'EUR' && p.freshness === 'live')).toBe(true);
+    // Dates ascending.
+    const dates = hist.map((p) => p.date);
+    expect([...dates].sort()).toEqual(dates);
+  });
+
+  it('returns empty history when the card has no Cardmarket data', async () => {
+    const noCm = { data: { id: 'x', tcgplayer: PTCG_CARD.data.tcgplayer } };
+    const adapter = createPokemonTcgRawPricing({ fetchImpl: mockFetch(noCm) });
+    const hist = await adapter.getRawPriceHistory({ cardExternalId: 'x', from: '2000-01-01', to: '2100-01-01' });
     expect(hist).toEqual([]);
   });
 

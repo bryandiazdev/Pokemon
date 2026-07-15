@@ -1,14 +1,15 @@
 import { Stat } from '@/components/stat';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { FreshnessBadge } from '@/components/ui/badge';
-import { DemoBanner } from '@/components/disclaimer';
+import { DataModeBanner } from '@/components/data-mode-banner';
 import { ValueLineChart } from '@/components/charts/line-chart';
 import { getPortfolioSummary, getPortfolioHistory } from '@/lib/services/portfolio';
 import { fmtMoney, fmtMinor } from '@/lib/format';
-import { isDemo } from '@/lib/env';
 import Link from 'next/link';
 import { ScanLine, Plus } from 'lucide-react';
 
+// Reads live provider data per request — must not be prerendered at build time.
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Dashboard' };
 
 export default async function DashboardPage() {
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      {isDemo && <DemoBanner />}
+      <DataModeBanner />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Your collection</h1>

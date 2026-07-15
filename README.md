@@ -40,6 +40,21 @@ cp .env.example .env.local
 pnpm dev              # http://localhost:3000
 ```
 
+### Real cards + real prices — just add one key
+
+Get a free key (30 seconds, no card) at https://dev.pokemontcg.io/ and set **only** this in
+`.env.local`:
+
+```bash
+POKEMON_TCG_API_KEY=your_free_key_here
+```
+
+The catalog and raw pricing switch to **live automatically** — real search, cards, images, raw
+prices, price history, and portfolio values, with a green "Live data" indicator and honest
+per-datum freshness badges. No Supabase needed (keep `DATA_MODE=demo`). Graded/PSA prices and
+population remain clearly-labeled sample data (a free key can't provide real graded sold prices —
+that needs a licensed source). Recognition stays on the demo adapter.
+
 Optional — the Python vision service (for live grade scans):
 
 ```bash

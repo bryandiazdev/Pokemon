@@ -1,19 +1,19 @@
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, FreshnessBadge } from '@/components/ui/badge';
-import { DemoBanner } from '@/components/disclaimer';
+import { DataModeBanner } from '@/components/data-mode-banner';
 import { getPortfolioSummary } from '@/lib/services/portfolio';
 import { fmtMoney, fmtMinor } from '@/lib/format';
-import { isDemo } from '@/lib/env';
 import { Plus, Download, Upload } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Collection' };
 
 export default async function CollectionPage() {
   const summary = await getPortfolioSummary();
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      {isDemo && <DemoBanner />}
+      <DataModeBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Collection</h1>
         <div className="flex gap-2">

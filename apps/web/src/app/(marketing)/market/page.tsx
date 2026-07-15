@@ -5,6 +5,7 @@ import { Badge, FreshnessBadge } from '@/components/ui/badge';
 import { getMarketOverview, type Mover } from '@/lib/services/market';
 import { fmtMinor, fmtPct } from '@/lib/format';
 
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Market',
   description: 'Most valuable cards and market movers across the Pokémon TCG.',

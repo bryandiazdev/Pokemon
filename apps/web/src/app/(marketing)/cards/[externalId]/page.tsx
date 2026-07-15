@@ -109,7 +109,7 @@ export default async function CardPage({ params }: Params) {
               {card.artist && <Badge>Illus. {card.artist}</Badge>}
               <Badge>{card.language.toUpperCase()}</Badge>
               {card.regulationMark && <Badge>Reg {card.regulationMark}</Badge>}
-              <FreshnessBadge freshness="demo" />
+              <FreshnessBadge freshness={nm?.freshness ?? 'demo'} />
             </div>
           </div>
 
@@ -187,7 +187,7 @@ export default async function CardPage({ params }: Params) {
         <Card>
           <CardHeader>
             <CardTitle>Price history</CardTitle>
-            <FreshnessBadge freshness="demo" />
+            <FreshnessBadge freshness={history[0]?.freshness ?? 'demo'} />
           </CardHeader>
           <PriceHistory externalId={externalId} initial={history} cardName={card.name} />
         </Card>

@@ -5,6 +5,7 @@ import { getCardPricing } from '@/lib/services/catalog';
 import { DEMO_CARDS } from '@psr/testing';
 import { fmtMinor } from '@/lib/format';
 
+export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Watchlist' };
 
 // Demo watchlist: a couple of fixture cards.

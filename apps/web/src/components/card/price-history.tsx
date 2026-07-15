@@ -38,6 +38,8 @@ export function PriceHistory({
     return () => ctrl.abort();
   }, [range, externalId, initial]);
 
+  const currency = data[0]?.currency ?? 'USD';
+
   return (
     <div>
       <div className="mb-3 flex gap-1" role="tablist" aria-label="Chart range">
@@ -56,9 +58,20 @@ export function PriceHistory({
           </button>
         ))}
       </div>
-      <div className={loading ? 'opacity-50' : ''}>
-        <ValueLineChart data={data} ariaLabel={`${cardName} raw Near Mint price history (${range})`} />
-      </div>
+      {data.length === 0 ? (
+        <p className="flex h-40 items-center justify-center text-center text-sm text-muted">
+          No price history is available from the current data source yet. Daily snapshots build
+          history over time.
+        </p>
+      ) : (
+        <div className={loading ? 'opacity-50' : ''}>
+          <ValueLineChart
+            data={data}
+            currency={currency}
+            ariaLabel={`${cardName} raw price history (${range})`}
+          />
+        </div>
+      )}
     </div>
   );
 }
