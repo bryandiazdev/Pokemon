@@ -116,7 +116,8 @@ export function createPokemonTcgCatalog(
     name: NAME,
     async searchCards(input: CardSearchInput): Promise<CardSearchResult> {
       const page = input.cursor ? Number(input.cursor) : 1;
-      const pageSize = input.limit ?? 20;
+      // The API caps pageSize at 250; clamp so large set listings don't 400.
+      const pageSize = Math.min(input.limit ?? 20, 250);
       const q = buildLucene(input);
       const path = `/cards?q=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}&orderBy=-set.releaseDate`;
       const body = await request<{ data: PtcgCard[]; totalCount: number }>(path);
