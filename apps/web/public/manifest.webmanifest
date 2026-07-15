@@ -1,0 +1,16 @@
+{
+  "name": "Pokémon Stock Radar",
+  "short_name": "Stock Radar",
+  "description": "Scan, value, and track your Pokémon TCG collection.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0e12",
+  "theme_color": "#0b0e12",
+  "categories": ["utilities", "finance", "productivity"],
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

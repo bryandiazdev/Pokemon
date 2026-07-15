@@ -1,0 +1,11 @@
+{
+  "note": "Grading companies covered for price comparison and (where modeled) rules. Only PSA has a modeled rules set in this build; others are covered for pricing comparison and can be extended with the same JSON shape as psa.json. Not affiliated with any of these companies.",
+  "companies": {
+    "psa": { "name": "PSA", "scaleMax": 10, "halfGrades": false, "rulesModeled": true },
+    "bgs": { "name": "Beckett (BGS)", "scaleMax": 10, "halfGrades": true, "rulesModeled": false },
+    "cgc": { "name": "CGC", "scaleMax": 10, "halfGrades": true, "rulesModeled": false },
+    "sgc": { "name": "SGC", "scaleMax": 10, "halfGrades": true, "rulesModeled": false },
+    "tag": { "name": "TAG", "scaleMax": 10, "halfGrades": true, "rulesModeled": false },
+    "ace": { "name": "ACE", "scaleMax": 10, "halfGrades": true, "rulesModeled": false }
+  }
+}

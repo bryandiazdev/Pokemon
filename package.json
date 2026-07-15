@@ -1,0 +1,30 @@
+{
+  "name": "pokemon-stock-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pokémon Stock Radar — collection, valuation, scanning, and grade-potential platform for the Pokémon TCG.",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @psr/web dev",
+    "build": "pnpm -r --filter=./packages/** build && pnpm --filter @psr/web build",
+    "start": "pnpm --filter @psr/web start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @psr/web test:e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "db:migrate": "pnpm --filter @psr/database migrate",
+    "db:seed": "pnpm --filter @psr/database seed",
+    "vision:dev": "cd apps/vision && uvicorn app.main:app --reload --port 8000",
+    "prepare": "husky || true"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

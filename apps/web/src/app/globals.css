@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* dark-first: these are the defaults */
+  --bg: 11 14 18;
+  --surface: 19 24 32;
+  --surface-elevated: 26 33 43;
+  --border: 37 45 56;
+  --content: 230 237 243;
+  --muted: 147 161 176;
+  --accent: 45 212 191;
+  --accent-strong: 20 184 166;
+  --gold: 217 164 65;
+  --positive: 63 185 80;
+  --negative: 248 81 73;
+  --warning: 210 153 34;
+  --info: 88 166 255;
+  --demo: 163 113 247;
+}
+
+:root.light {
+  --bg: 248 250 252;
+  --surface: 255 255 255;
+  --surface-elevated: 241 245 249;
+  --border: 214 222 232;
+  --content: 15 23 42;
+  --muted: 71 85 105;
+  --accent: 13 148 136;
+  --accent-strong: 15 118 110;
+  --gold: 180 131 42;
+  --positive: 22 128 61;
+  --negative: 185 28 28;
+  --warning: 161 98 7;
+  --info: 37 99 235;
+  --demo: 124 58 237;
+}
+
+html {
+  color-scheme: dark;
+}
+:root.light html,
+.light {
+  color-scheme: light;
+}
+
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--content));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Accessible focus ring for keyboard users */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@layer components {
+  .psr-input {
+    @apply block w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm text-content outline-none focus-visible:border-accent;
+    min-height: 44px;
+  }
+}

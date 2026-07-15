@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# testing
+coverage/
+playwright-report/
+test-results/
+.vitest/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# supabase
+apps/web/supabase/.branches
+apps/web/supabase/.temp
+supabase/.temp/
+
+# misc
+.turbo/
+.vercel/
+
+# python venv created during vision verification
+apps/vision/.venv/

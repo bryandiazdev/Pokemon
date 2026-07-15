@@ -1,0 +1,42 @@
+{
+  "company": "psa",
+  "rulesVersion": "psa-2024.1",
+  "effectiveDate": "2024-01-01",
+  "source": "Public PSA grading standards summary; interpreted conservatively. Not affiliated with or endorsed by PSA. Re-verify against PSA's current published standards before relying on these thresholds.",
+  "disclaimer": "These thresholds are an internal, conservative interpretation used only to bound an ESTIMATE. Professional grading is subjective and performed in person.",
+  "scale": { "min": 1, "max": 10, "supportsHalfGrades": false },
+  "centering": {
+    "note": "Front tolerances by grade, expressed as the max allowed off-center as 'larger/smaller'. Back tolerances are looser and applied separately.",
+    "frontToleranceByGrade": {
+      "10": "55/45",
+      "9": "60/40",
+      "8": "65/35",
+      "7": "70/30",
+      "6": "75/25",
+      "5": "80/20"
+    },
+    "backToleranceByGrade": {
+      "10": "75/25",
+      "9": "80/20",
+      "8": "85/15"
+    }
+  },
+  "gradeBands": [
+    { "grade": 10, "label": "Gem Mint", "requires": "Virtually perfect. Sharp corners, clean edges, no surface flaws, near-perfect centering." },
+    { "grade": 9, "label": "Mint", "requires": "One minor flaw permitted (slight wax stain, minor print spot, or slight off-center)." },
+    { "grade": 8, "label": "NM-MT", "requires": "Minor wear: slight fraying at a corner, minor whitening, light scratch." },
+    { "grade": 7, "label": "Near Mint", "requires": "Light surface wear, minor whitening on edges/corners." },
+    { "grade": 6, "label": "EX-MT", "requires": "Visible wear, minor creasing possible." },
+    { "grade": 5, "label": "EX", "requires": "Moderate wear, light scratching, corner wear." }
+  ],
+  "defectCaps": {
+    "note": "A single serious defect caps the ceiling regardless of other strong sub-scores.",
+    "crease": 4,
+    "severe_corner_damage": 5,
+    "severe_edge_damage": 5,
+    "surface_scratch_deep": 6,
+    "whitening_heavy": 7,
+    "possible_dimensional_irregularity": 5,
+    "water_damage": 3
+  }
+}
