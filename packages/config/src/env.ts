@@ -12,6 +12,7 @@ const providerSelector = z
   .enum([
     'demo',
     'pokemontcg',
+    'catalog-ocr',
     'tcgdex',
     'scrydex',
     'justtcg',

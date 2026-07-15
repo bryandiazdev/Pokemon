@@ -8,6 +8,8 @@ import { ProviderRegistry, type RegistryOptions } from './registry';
 import type { Capability, ProviderCapabilities } from './interfaces';
 import { demoProviderCapabilities } from './adapters/demo';
 import { createPokemonTcgCatalog } from './adapters/pokemontcg';
+import { createPokemonTcgRawPricing } from './adapters/pokemontcg-pricing';
+import { createCatalogOcrRecognition } from './adapters/catalog-ocr-recognition';
 
 export interface ProviderConfig {
   catalog: string;
@@ -42,10 +44,24 @@ export function buildRegistry(
     primary.catalog = demo.catalog;
   }
 
+  // Recognition: live "catalog-ocr" adapter, else demo.
+  if (config.recognition === 'catalog-ocr') {
+    primary.recognition = createCatalogOcrRecognition(primary.catalog!);
+  } else {
+    if (config.recognition !== 'demo') warn('recognition', config.recognition);
+    primary.recognition = demo.recognition;
+  }
+
+  // Raw pricing: live Pokémon TCG adapter, else demo.
+  if (config.rawPricing === 'pokemontcg') {
+    primary.rawPricing = createPokemonTcgRawPricing({ apiKey: config.pokemonTcgApiKey });
+  } else {
+    if (config.rawPricing !== 'demo') warn('rawPricing', config.rawPricing);
+    primary.rawPricing = demo.rawPricing;
+  }
+
   // Remaining capabilities: only demo adapters are implemented in this build.
   const remaining: [Capability, keyof ProviderConfig][] = [
-    ['recognition', 'recognition'],
-    ['rawPricing', 'rawPricing'],
     ['gradedPricing', 'gradedPricing'],
     ['population', 'population'],
     ['certification', 'certification'],

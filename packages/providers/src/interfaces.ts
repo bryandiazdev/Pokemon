@@ -177,6 +177,17 @@ export interface CardImageInput {
   /** base64 or a short-lived signed URL — never a public bucket path. */
   imageRef: string;
   language?: Language;
+  /**
+   * Optional OCR text extracted on-device or by a vision OCR pass. The
+   * catalog-OCR recognition adapter uses these hints to rank candidates. A pure
+   * image-recognition provider may ignore them.
+   */
+  ocr?: {
+    name?: string;
+    number?: string;
+    setName?: string;
+    rawText?: string;
+  };
 }
 
 // ---------- Capability interfaces ----------

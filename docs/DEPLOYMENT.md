@@ -45,9 +45,25 @@ are optional.
 4. Entitlements are defined in DB (`entitlements` + plan defaults in `@psr/config`) — change
    limits without a deploy.
 
-## Trigger.dev / Redis / Resend / Sentry / PostHog
+## Background jobs (Trigger.dev)
+Durable jobs live in `apps/web/src/trigger/*` as thin wrappers around the tested functions in
+`apps/web/src/lib/jobs/*`:
+- **`price-snapshot`** — priority-ordered (owned/watched first), batched + rate-limit aware,
+  distributed-lock guarded, idempotent via the daily `price_points` unique key.
+- **`portfolio-snapshot`** — values every user's collection daily; idempotent on
+  `(user_id, snapshot_date)`.
+- **`alert-evaluation`** — evaluates alerts with cadence-based cooldowns; writes `notifications`.
+- **`daily-sync`** — a scheduled task (cron `0 6 * * *`) that runs the three in dependency order.
+
+Deploy: set `TRIGGER_SECRET_KEY` + `TRIGGER_PROJECT_REF`, then `npx trigger.dev@latest deploy`
+from `apps/web`. The jobs choose a live Supabase-backed store when Supabase is configured and an
+in-memory demo store otherwise, so they run in demo mode too. Manual re-runs: `POST /api/admin/jobs`
+with `{ "job": "daily-sync" }` (admin-gated).
+
+## Redis / Resend / Sentry / PostHog
 Add the corresponding keys from `.env.example`; each integration degrades gracefully (no-ops with
-a warning) when its key is absent, so the app still boots.
+a warning) when its key is absent, so the app still boots. The price-snapshot lock uses Upstash
+Redis when configured and falls back to an in-process lock otherwise.
 
 ## CI/CD
 GitHub Actions (`.github/workflows/ci.yml`): install → typecheck → lint → unit tests → vision

@@ -19,13 +19,17 @@ Updated continuously. ✅ done · 🟡 partial · ⬜ not started.
 ## Phase 2 — Catalog
 - ✅ Schema (sets/cards/variants/external mappings) + fixtures
 - ✅ Catalog provider (fixtures + Pokémon TCG adapter) + search service (fuzzy)
+- ✅ **Live raw-pricing adapter** (Pokémon TCG embedded TCGplayer/Cardmarket) — tested
+- ✅ **Live recognition adapter** (catalog-OCR ranking) — tested
 - 🟡 Card/Set pages (implemented against fixtures) · sync job (interface + demo)
 
 ## Phase 3 — Collections
 - ✅ Schema + RLS · 🟡 manual add/edit UI, portfolio valuation service, CSV import/export (services + partial UI)
 
 ## Phase 4 — Pricing
-- ✅ Schema · 🟡 normalization + history charts (demo data) · ⬜ live daily snapshot job on Trigger.dev
+- ✅ Schema · ✅ normalization · 🟡 history charts (demo data)
+- ✅ **Daily price-snapshot job** (Trigger.dev) — priority queue, batched, rate-limit aware,
+  distributed lock, idempotent; runs live via `POST /api/admin/jobs` (verified: 96 points, dedupes on re-run)
 
 ## Phase 5 — Billing
 - ✅ Schema (subscriptions/entitlements/usage) · 🟡 Stripe service + webhook handler + entitlement gates (mock-mode)
@@ -37,7 +41,9 @@ Updated continuously. ✅ done · 🟡 partial · ⬜ not started.
 - ✅ Vision service (quality, centering deterministic) · 🟡 corners/edges/surface heuristics · ✅ rules engine · 🟡 report UI + EV calculator
 
 ## Phase 8 — Watchlists & alerts
-- ✅ Schema · 🟡 services · ⬜ live alert job + email delivery
+- ✅ Schema · 🟡 services · ✅ **alert-evaluation job** (Trigger.dev) — cadence cooldowns,
+  dedupe, notifications; verified live (fires once, cooldown suppresses re-run) · 🟡 email delivery
+- ✅ **portfolio-snapshot job** + **daily-sync** orchestration (cron 06:00 UTC)
 
 ## Phase 9 — Admin & observability
 - ✅ Schema (audit/flags) · 🟡 admin dashboard shell · ⬜ full metrics
@@ -48,9 +54,12 @@ Updated continuously. ✅ done · 🟡 partial · ⬜ not started.
 ## Test results (Phase 1 verification)
 - `pnpm -r typecheck` — ✅ clean across all 8 workspace projects.
 - Unit tests — ✅ all passing:
-  - `@psr/types` 8 · `@psr/config` 3 · `@psr/grading-rules` 6 · `@psr/providers` 12
-  - `@psr/web` 5 (entitlement gates) · `@psr/database` 89 schema (+4 RLS skipped w/o DB)
+  - `@psr/types` 8 · `@psr/config` 3 · `@psr/grading-rules` 6 · `@psr/providers` 21
+    (incl. live Pokémon TCG pricing + catalog-OCR recognition adapters)
+  - `@psr/web` 10 (entitlement gates + background jobs) · `@psr/database` 89 schema (+4 RLS skipped)
   - `apps/vision` 14 (pytest, real OpenCV fixtures) · ruff clean
+- Background jobs verified live via `POST /api/admin/jobs`: price-snapshot (96 points, idempotent
+  dedupe on re-run), portfolio-snapshot (1 snapshot), alert-evaluation (1 fired, cooldown suppresses).
 - `pnpm --filter @psr/web build` — ✅ production build succeeds; every route compiled.
 - Live smoke (demo mode) — ✅ homepage, `/api/search`, card pages, dashboard, `/api/grade/analyze`,
   CSV export, and typed validation errors all serve correctly.

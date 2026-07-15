@@ -78,7 +78,22 @@ If the primary provider's breaker is open, the next configured provider (or demo
 non-prod) serves the request, and the response is badged as degraded/stale.
 
 ## Current status in this repo
-- **Implemented:** demo/fixture adapters for every capability; Pokémon TCG catalog adapter;
-  registry with timeout/retry/circuit-breaker/cache; contract tests against fixtures.
+- **Implemented (live, behind the interfaces):**
+  - **Catalog** — Pokémon TCG API adapter (`CATALOG_PROVIDER=pokemontcg`).
+  - **Raw pricing** — Pokémon TCG API adapter (`RAW_PRICING_PROVIDER=pokemontcg`) that
+    normalizes the card object's embedded TCGplayer (USD) + Cardmarket (EUR) prices to
+    `NormalizedPrice[]`. No history from this source by design — daily `price_points` snapshots
+    build history (see the price-snapshot job). Tested with mocked fetch fixtures.
+  - **Recognition** — Catalog-OCR adapter (`RECOGNITION_PROVIDER=catalog-ocr`): ranks catalog
+    candidates from OCR text (name/number/set) with a deterministic bigram similarity + number/
+    language bonuses; never auto-selects ambiguous look-alikes. A hosted image-recognition
+    provider can replace it behind the same interface. Tested.
+- **Implemented (fixtures):** demo adapters for every capability; registry with
+  timeout/retry/circuit-breaker/cache; contract tests.
 - **Stubbed with interface + docs (enable by adding creds + finishing the adapter):** Scrydex,
-  JustTCG, PriceCharting, PSA, eBay Browse, TCGdex, Cardmarket.
+  JustTCG, PriceCharting, PSA, eBay Browse, TCGdex, Cardmarket, graded pricing, population,
+  certification, active listings.
+
+> Note on OCR: the catalog-OCR recognition adapter expects OCR text (`CardImageInput.ocr`)
+> supplied on-device (e.g. Tesseract.js) or by a vision OCR pass. This keeps recognition free
+> and provider-agnostic; the demo recognition adapter returns ranked candidates without OCR.
