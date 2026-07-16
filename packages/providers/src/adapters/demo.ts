@@ -48,13 +48,30 @@ function scoreMatch(card: NormalizedCard, q: string): number {
 
 const catalog: CardCatalogProvider = {
   name: NAME,
-  async searchCards({ query, limit = 20 }) {
-    const cards = DEMO_CARDS.map((c) => ({ c, s: scoreMatch(c, query) }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s)
-      .slice(0, limit)
-      .map((x) => x.c);
-    return { cards, nextCursor: null };
+  async searchCards({ query, limit = 20, setExternalId, cursor }) {
+    let pool = setExternalId
+      ? DEMO_CARDS.filter((c) => c.setExternalId === setExternalId)
+      : DEMO_CARDS;
+
+    const q = query.trim();
+    if (q) {
+      pool = pool
+        .map((c) => ({ c, s: scoreMatch(c, q) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .map((x) => x.c);
+    } else if (!setExternalId) {
+      // Empty global search: soft-match every card (demo browse behavior).
+      pool = DEMO_CARDS.map((c) => ({ c, s: scoreMatch(c, '') }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .map((x) => x.c);
+    }
+
+    const offset = cursor ? Number(cursor) || 0 : 0;
+    const cards = pool.slice(offset, offset + limit);
+    const nextCursor = offset + limit < pool.length ? String(offset + limit) : null;
+    return { cards, nextCursor };
   },
   async getCard(externalId) {
     return findCard(externalId);

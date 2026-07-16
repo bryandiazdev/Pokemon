@@ -167,11 +167,11 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
     };
   }
 
-  function normalizeBriefCard(c: TcgdexCardBrief, language: Language): NormalizedCard {
+  function normalizeBriefCard(c: TcgdexCardBrief, language: Language, setExternalId?: string): NormalizedCard {
     return {
       externalId: c.id,
       provider: NAME,
-      setExternalId: setIdFromCardId(c.id),
+      setExternalId: setExternalId ?? setIdFromCardId(c.id),
       name: c.name,
       number: c.localId ?? c.id,
       printedNumber: c.localId ?? null,
@@ -187,11 +187,41 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
     };
   }
 
+  /** Set endpoint returns every card; cache briefly so infinite-scroll pages don't re-fetch. */
+  const setCardsCache = new Map<string, { at: number; cards: NormalizedCard[] }>();
+  const SET_CARDS_TTL_MS = 5 * 60_000;
+
+  async function cardsInSet(setExternalId: string, language: Language): Promise<NormalizedCard[]> {
+    const key = `${language}:${setExternalId}`;
+    const hit = setCardsCache.get(key);
+    if (hit && Date.now() - hit.at < SET_CARDS_TTL_MS) return hit.cards;
+
+    const set = await request<TcgdexSetFull>(
+      `/${language}/sets/${encodeURIComponent(setExternalId)}`,
+    );
+    const cards = (set.cards ?? []).map((c) => normalizeBriefCard(c, language, setExternalId));
+    setCardsCache.set(key, { at: Date.now(), cards });
+    return cards;
+  }
+
   return {
     name: NAME,
     async searchCards(input: CardSearchInput): Promise<CardSearchResult> {
       const language = input.language ?? defaultLang;
       const query = input.query.trim();
+      const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+
+      // Full set listing: use the set payload (all cards) and page by offset cursor.
+      // The /cards search endpoint caps at 100 total results per request and cannot
+      // page past that for large sets.
+      if (input.setExternalId && !query) {
+        const all = await cardsInSet(input.setExternalId, language);
+        const offset = input.cursor ? Number(input.cursor) || 0 : 0;
+        const cards = all.slice(offset, offset + limit);
+        const nextCursor = offset + limit < all.length ? String(offset + limit) : null;
+        return { cards, nextCursor };
+      }
+
       // Split a trailing/na collector number out of the query ("Charizard 4", "199/165").
       const numberMatch = query.match(/(\d+[a-z]?)(?:\/\d+)?\s*$/i);
       const number = numberMatch?.[1];
@@ -200,7 +230,7 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
       const params = new URLSearchParams();
       if (nameOnly) params.set('name', nameOnly);
       if (input.setExternalId) params.set('set', input.setExternalId);
-      params.set('pagination:itemsPerPage', String(Math.min(input.limit ?? 25, 100)));
+      params.set('pagination:itemsPerPage', String(limit));
       params.set('pagination:page', input.cursor ?? '1');
 
       let cards: TcgdexCardBrief[];
@@ -213,7 +243,7 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
         throw err;
       }
 
-      let normalized = cards.map((c) => normalizeBriefCard(c, language));
+      let normalized = cards.map((c) => normalizeBriefCard(c, language, input.setExternalId));
       // Client-side number filter when the query carried a collector number.
       if (number) {
         const wanted = number.toLowerCase();
@@ -221,7 +251,7 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
         if (filtered.length > 0) normalized = filtered;
       }
       const page = Number(input.cursor ?? '1');
-      const nextCursor = normalized.length >= (input.limit ?? 25) ? String(page + 1) : null;
+      const nextCursor = normalized.length >= limit ? String(page + 1) : null;
       return { cards: normalized, nextCursor };
     },
 

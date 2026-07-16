@@ -62,13 +62,13 @@ export function SetsExplorer({ sets }: SetsExplorerProps) {
             </p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             {filtered.map((set) => (
               <Link key={set.externalId} href={`/sets/${set.externalId}`}>
                 <Card className="h-full transition-colors hover:border-accent/50">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-medium">{set.name}</h3>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-medium sm:text-base">{set.name}</h3>
                       <p className="text-xs text-muted">{set.series}</p>
                     </div>
                     <Badge tone={set.language === 'ja' ? 'info' : 'neutral'}>

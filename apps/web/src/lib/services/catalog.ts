@@ -73,12 +73,39 @@ export async function getCard(externalId: string): Promise<NormalizedCard> {
   });
 }
 
-export async function getCardsInSet(setExternalId: string): Promise<NormalizedCard[]> {
-  // Demo catalog: filter search results. Live adapters would page by set.
-  const res = await getRegistry().call('catalog', 'searchCards', (a) =>
-    a.searchCards({ query: '', setExternalId, limit: 500 }),
+/** Default page size for set card grids (divisible by 2 and 3 columns). */
+export const SET_CARDS_PAGE_SIZE = 36;
+
+export async function getCardsInSetPage(
+  setExternalId: string,
+  opts: { limit?: number; cursor?: string | null } = {},
+): Promise<{ cards: NormalizedCard[]; nextCursor: string | null }> {
+  const limit = opts.limit ?? SET_CARDS_PAGE_SIZE;
+  const cursor = opts.cursor ?? undefined;
+  const res = await getRegistry().call(
+    'catalog',
+    'searchCards',
+    (a) => a.searchCards({ query: '', setExternalId, limit, cursor }),
+    {
+      key: `catalog:set-cards:${setExternalId}:${cursor ?? 'start'}:${limit}`,
+      ttlSeconds: 3600,
+    },
   );
-  return res.cards.filter((c) => c.setExternalId === setExternalId);
+  const cards = res.cards.filter((c) => c.setExternalId === setExternalId);
+  return { cards, nextCursor: res.nextCursor };
+}
+
+/** Load every card in a set by walking provider pages (prefer getCardsInSetPage for UI). */
+export async function getCardsInSet(setExternalId: string): Promise<NormalizedCard[]> {
+  const all: NormalizedCard[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < 50; i++) {
+    const page = await getCardsInSetPage(setExternalId, { limit: 100, cursor });
+    all.push(...page.cards);
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return all;
 }
 
 export interface CardPricing {

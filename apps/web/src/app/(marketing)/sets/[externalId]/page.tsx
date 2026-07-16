@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getSet, getCardsInSet } from '@/lib/services/catalog';
+import { getSet, getCardsInSetPage, SET_CARDS_PAGE_SIZE } from '@/lib/services/catalog';
+import { SetCardsGrid } from './set-cards-grid';
 
 interface Params {
   params: Promise<{ externalId: string }>;
@@ -27,7 +28,9 @@ export default async function SetPage({ params }: Params) {
   } catch {
     notFound();
   }
-  const cards = await getCardsInSet(externalId);
+  const { cards, nextCursor } = await getCardsInSetPage(externalId, {
+    limit: SET_CARDS_PAGE_SIZE,
+  });
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-6">
@@ -62,24 +65,11 @@ export default async function SetPage({ params }: Params) {
         </p>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((card) => (
-          <Link key={card.externalId} href={`/cards/${card.externalId}`}>
-            <Card className="h-full transition-colors hover:border-accent/50">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate font-medium">{card.name}</h3>
-                  <p className="text-xs text-muted">#{card.number}</p>
-                </div>
-                {card.rarity && <Badge>{card.rarity}</Badge>}
-              </div>
-            </Card>
-          </Link>
-        ))}
-        {cards.length === 0 && (
-          <p className="text-sm text-muted">No cards available for this set in demo mode.</p>
-        )}
-      </div>
+      <SetCardsGrid
+        setExternalId={externalId}
+        initialCards={cards}
+        initialCursor={nextCursor}
+      />
     </div>
   );
 }
