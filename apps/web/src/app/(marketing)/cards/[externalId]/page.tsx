@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, FreshnessBadge } from '@/components/ui/badge';
+import { Slab } from '@/components/ui/slab';
 import { PriceHistory } from '@/components/card/price-history';
 import {
   getCard,
@@ -60,55 +61,70 @@ export default async function CardPage({ params }: Params) {
   const nm = rawByCondition.get('near_mint');
   const psa10 = pricing.graded.find((g) => g.gradingCompany === 'psa' && g.grade === '10');
   const multiplier = nm && psa10 ? (psa10.valueMinor / nm.valueMinor).toFixed(1) : null;
+  const premium = /rare|holo|illustration|special|secret|\bex\b|full art/i.test(card.rarity ?? '');
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-6">
-      <nav className="text-sm text-muted">
-        <Link href="/sets" className="hover:text-content">
+    <div className="mx-auto max-w-5xl space-y-6 py-8">
+      <nav className="label-strip">
+        <Link href="/sets" className="hover:text-muted">
           Sets
-        </Link>{' '}
-        /{' '}
+        </Link>
         {set && (
-          <Link href={`/sets/${set.externalId}`} className="hover:text-content">
-            {set.name}
-          </Link>
+          <>
+            {' / '}
+            <Link href={`/sets/${set.externalId}`} className="hover:text-muted">
+              {set.name}
+            </Link>
+          </>
         )}
       </nav>
 
-      <div className="grid gap-6 md:grid-cols-[280px_1fr]">
+      <div className="grid gap-8 md:grid-cols-[300px_1fr]">
         <div className="space-y-3">
-          <div className="flex aspect-[2.5/3.5] items-center justify-center rounded-xl border border-border bg-surface text-muted">
-            {card.imageLargeUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={card.imageLargeUrl} alt={`${card.name} card`} className="h-full w-full rounded-xl object-contain" />
-            ) : (
-              <span className="p-6 text-center text-sm">Card image unavailable in demo mode</span>
-            )}
-          </div>
+          <Slab
+            imageUrl={card.imageLargeUrl ?? card.imageSmallUrl}
+            name={card.name}
+            setName={set?.name ?? null}
+            number={card.number}
+            premium={premium}
+          />
           <div className="flex flex-wrap gap-2">
-            <Link href="/app/scan" className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg border border-border text-sm hover:bg-surface-elevated">
+            <Link
+              href="/app/scan"
+              className="inline-flex min-h-[42px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-border text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
+            >
               <ScanLine size={15} /> Scan copy
             </Link>
-            <Link href="/app/watchlist" className="inline-flex min-h-[40px] items-center justify-center rounded-lg border border-border px-3 text-sm hover:bg-surface-elevated" aria-label="Add to watchlist">
+            <Link
+              href="/app/watchlist"
+              className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-border px-3 text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
+              aria-label="Add to watchlist"
+            >
               <Eye size={15} />
             </Link>
-            <Link href="/app/alerts" className="inline-flex min-h-[40px] items-center justify-center rounded-lg border border-border px-3 text-sm hover:bg-surface-elevated" aria-label="Create price alert">
+            <Link
+              href="/app/alerts"
+              className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-border px-3 text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
+              aria-label="Create price alert"
+            >
               <Bell size={15} />
             </Link>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <h1 className="font-display text-2xl font-semibold">{card.name}</h1>
-            <p className="text-muted">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-content">
+              {card.name}
+            </h1>
+            <p className="mt-1 text-muted">
               {set?.name} · #{card.number}
               {card.rarity ? ` · ${card.rarity}` : ''}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {card.artist && <Badge>Illus. {card.artist}</Badge>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {card.artist && <Badge>ILLUS. {card.artist.toUpperCase()}</Badge>}
               <Badge>{card.language.toUpperCase()}</Badge>
-              {card.regulationMark && <Badge>Reg {card.regulationMark}</Badge>}
+              {card.regulationMark && <Badge>REG {card.regulationMark}</Badge>}
               <FreshnessBadge freshness={nm?.freshness ?? 'demo'} />
             </div>
           </div>
@@ -118,13 +134,16 @@ export default async function CardPage({ params }: Params) {
               <CardTitle>Raw market value</CardTitle>
               {nm && <FreshnessBadge freshness={nm.freshness} />}
             </CardHeader>
-            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {RAW_CONDITIONS.filter((c) => c !== 'unspecified').map((cond) => {
                 const p = rawByCondition.get(cond);
                 return (
-                  <div key={cond} className="rounded-lg bg-surface-elevated p-3">
-                    <div className="text-xs text-muted">{CONDITION_LABEL[cond]}</div>
-                    <div className="mt-0.5 font-medium tabular-nums">
+                  <div
+                    key={cond}
+                    className="rounded-lg border border-border bg-bg-deep/40 p-3"
+                  >
+                    <div className="label-strip">{CONDITION_LABEL[cond]}</div>
+                    <div className="mt-1 font-mono text-base font-medium tabular text-content">
                       {p ? fmtMinor(p.valueMinor, p.currency) : '—'}
                     </div>
                   </div>
@@ -134,10 +153,12 @@ export default async function CardPage({ params }: Params) {
           </Card>
 
           {multiplier && (
-            <div className="flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-sm">
-              <Badge tone="gold">Raw → PSA 10</Badge>
+            <div className="flex items-center gap-3 rounded-lg border border-gold/30 bg-gold/8 px-4 py-3 text-sm">
+              <Badge tone="gold">RAW → PSA 10</Badge>
               <span className="text-content">
-                A PSA 10 is about <strong>{multiplier}×</strong> the raw Near Mint value here.
+                A PSA 10 is about{' '}
+                <strong className="font-mono text-gold">{multiplier}×</strong> the raw Near Mint
+                value here.
               </span>
             </div>
           )}
@@ -147,31 +168,33 @@ export default async function CardPage({ params }: Params) {
       <Card>
         <CardHeader>
           <CardTitle>Graded market values</CardTitle>
-          <span className="text-xs text-muted">Comparison across grading companies</span>
+          <span className="label-strip">Across grading companies</span>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase text-muted">
-                <th className="py-2 pr-4 font-medium">Company</th>
-                <th className="py-2 pr-4 font-medium">Grade</th>
-                <th className="py-2 pr-4 font-medium">Value</th>
-                <th className="py-2 pr-4 font-medium">Range</th>
-                <th className="py-2 font-medium">Obs.</th>
+              <tr className="label-strip text-left">
+                <th className="py-2 pr-4 font-normal">Company</th>
+                <th className="py-2 pr-4 font-normal">Grade</th>
+                <th className="py-2 pr-4 font-normal">Value</th>
+                <th className="py-2 pr-4 font-normal">Range</th>
+                <th className="py-2 font-normal">Obs.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {pricing.graded.map((g, i) => (
-                <tr key={i}>
-                  <td className="py-2 pr-4 uppercase">{g.gradingCompany}</td>
-                  <td className="py-2 pr-4">{g.grade}</td>
-                  <td className="py-2 pr-4 font-medium tabular-nums">
+                <tr key={i} className="transition-colors hover:bg-surface-elevated/40">
+                  <td className="py-2.5 pr-4 font-mono uppercase text-content">{g.gradingCompany}</td>
+                  <td className="py-2.5 pr-4 font-mono text-content">{g.grade}</td>
+                  <td className="py-2.5 pr-4 font-mono font-medium tabular text-content">
                     {fmtMinor(g.valueMinor, g.currency)}
                   </td>
-                  <td className="py-2 pr-4 text-muted tabular-nums">
-                    {g.lowMinor != null ? `${fmtMinor(g.lowMinor, g.currency)}–${fmtMinor(g.highMinor ?? g.valueMinor, g.currency)}` : '—'}
+                  <td className="py-2.5 pr-4 font-mono tabular text-muted">
+                    {g.lowMinor != null
+                      ? `${fmtMinor(g.lowMinor, g.currency)}–${fmtMinor(g.highMinor ?? g.valueMinor, g.currency)}`
+                      : '—'}
                   </td>
-                  <td className="py-2 text-muted">{g.sampleSize ?? '—'}</td>
+                  <td className="py-2.5 font-mono text-muted">{g.sampleSize ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -201,12 +224,14 @@ export default async function CardPage({ params }: Params) {
                 .map(([grade, count]) => (
                   <div key={grade} className="flex justify-between">
                     <dt className="text-muted">Grade {grade}</dt>
-                    <dd className="tabular-nums">{count.toLocaleString()}</dd>
+                    <dd className="font-mono tabular text-content">{count.toLocaleString()}</dd>
                   </div>
                 ))}
               <div className="flex justify-between border-t border-border pt-1.5">
                 <dt className="text-muted">Gem rate</dt>
-                <dd className="tabular-nums">{((population.gemRate ?? 0) * 100).toFixed(1)}%</dd>
+                <dd className="font-mono tabular text-content">
+                  {((population.gemRate ?? 0) * 100).toFixed(1)}%
+                </dd>
               </div>
             </dl>
             <p className="mt-2 text-xs text-muted">Demo data. Not affiliated with PSA.</p>

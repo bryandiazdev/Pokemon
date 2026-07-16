@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { GradeDisclaimer } from '@/components/disclaimer';
-import { CheckCircle2, Circle, Camera } from 'lucide-react';
+import { RadarMark } from '@/components/brand';
+import { CheckCircle2, Circle, Camera, RotateCcw } from 'lucide-react';
 
 const CAPTURES = [
   { key: 'front', label: 'Front — straight on', required: true },
@@ -74,11 +75,11 @@ export function GradeClient() {
     <div className="space-y-5">
       <Card>
         <CardTitle>Before you start</CardTitle>
-        <ul className="mt-2 space-y-1 text-sm text-muted">
-          <li>• Remove the card from sleeves and top loaders.</li>
-          <li>• Use a clean, dark, non-reflective background and bright indirect light.</li>
-          <li>• Clean the camera lens; keep the card flat and the camera parallel.</li>
-          <li>• Avoid fingers over corners and edges; don’t apply filters.</li>
+        <ul className="mt-3 space-y-1.5 text-sm text-muted">
+          <li>· Remove the card from sleeves and top loaders.</li>
+          <li>· Use a clean, dark, non-reflective background and bright indirect light.</li>
+          <li>· Clean the camera lens; keep the card flat and the camera parallel.</li>
+          <li>· Avoid fingers over corners and edges; don’t apply filters.</li>
         </ul>
       </Card>
 
@@ -97,16 +98,20 @@ export function GradeClient() {
                 <button
                   type="button"
                   onClick={() => toggle(c.key)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-border p-3 text-left text-sm hover:border-accent"
+                  className={`flex w-full items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                    done
+                      ? 'border-accent/40 bg-accent/5'
+                      : 'border-border hover:border-border-strong'
+                  }`}
                 >
                   {done ? (
                     <CheckCircle2 size={18} className="text-positive" />
                   ) : (
-                    <Circle size={18} className="text-muted" />
+                    <Circle size={18} className="text-faint" />
                   )}
                   <span className="flex-1">{c.label}</span>
-                  {c.required && !done && <Badge tone="warning">Required</Badge>}
-                  <Camera size={15} className="text-muted" />
+                  {c.required && !done && <Badge tone="warning">REQ</Badge>}
+                  <Camera size={15} className="text-faint" />
                 </button>
               </li>
             );
@@ -118,7 +123,7 @@ export function GradeClient() {
         </p>
       </Card>
 
-      <Button onClick={runAnalysis} disabled={!requiredDone || loading}>
+      <Button variant="holo" onClick={runAnalysis} disabled={!requiredDone || loading}>
         {loading ? 'Analyzing…' : 'Run Grade Potential analysis'}
       </Button>
       {!requiredDone && (
@@ -128,16 +133,29 @@ export function GradeClient() {
   );
 }
 
-function ScoreBar({ label, value }: { label: string; value: number }) {
-  const tone = value >= 85 ? 'bg-positive' : value >= 65 ? 'bg-warning' : 'bg-negative';
+const SCORE_META: Record<keyof Scores, { label: string; color: string }> = {
+  centering: { label: 'Centering', color: 'var(--era-water)' },
+  corner: { label: 'Corners', color: 'var(--era-psychic)' },
+  edge: { label: 'Edges', color: 'var(--era-grass)' },
+  surface: { label: 'Surface', color: 'var(--era-lightning)' },
+  structural: { label: 'Structural', color: 'var(--era-steel)' },
+  imageQuality: { label: 'Image quality', color: 'var(--era-fire)' },
+};
+
+function ScoreBar({ metaKey, value }: { metaKey: keyof Scores; value: number }) {
+  const meta = SCORE_META[metaKey];
   return (
     <div>
-      <div className="mb-1 flex justify-between text-xs">
-        <span className="text-muted">{label}</span>
-        <span className="tabular-nums">{value}</span>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="label-strip !tracking-wide text-muted">{meta.label}</span>
+        <span className="font-mono text-sm tabular text-content">{value}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-surface-elevated">
-        <div className={`h-full ${tone}`} style={{ width: `${value}%` }} aria-hidden />
+      <div className="h-1.5 overflow-hidden rounded-full bg-bg-deep">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${value}%`, background: `rgb(${meta.color})` }}
+          aria-hidden
+        />
       </div>
     </div>
   );
@@ -145,49 +163,55 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 
 function GradeReport({ report, onReset }: { report: Report; onReset: () => void }) {
   const { estimate, scores } = report;
+  const strong = estimate.submissionRecommendation.includes('Strong');
+  const possible = estimate.submissionRecommendation.includes('Possible');
+  const recTone = strong ? 'positive' : possible ? 'gold' : 'neutral';
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Grade Potential report</h2>
+        <h2 className="font-display text-xl font-semibold">Grade Potential report</h2>
         <Button variant="ghost" size="sm" onClick={onReset}>
-          New analysis
+          <RotateCcw size={14} /> New analysis
         </Button>
       </div>
 
-      <Card>
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Headline result — styled as a grading "slab label". */}
+      <div className="slab hairline-top holo group overflow-hidden">
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-bg-deep/60 px-5 py-3">
+          <span className="label-strip text-accent">Estimated PSA range · not a guarantee</span>
+          <RadarMark size={20} sweep={false} className="opacity-70" />
+        </div>
+        <div className="relative flex flex-wrap items-end justify-between gap-6 p-5">
+          <span className="holo-sheen" />
           <div>
-            <div className="text-xs uppercase text-muted">Estimated PSA range</div>
-            <div className="text-3xl font-semibold tabular-nums">
-              {estimate.estimatedMinGrade}–{estimate.estimatedMaxGrade}
+            <div className="font-display text-5xl font-semibold leading-none tabular text-content">
+              <span className="text-prism">
+                {estimate.estimatedMinGrade}–{estimate.estimatedMaxGrade}
+              </span>
             </div>
-            <div className="text-sm text-muted">
-              Estimated ceiling: PSA {estimate.estimatedCeiling}
+            <div className="mt-2 label-strip">
+              Ceiling · PSA {estimate.estimatedCeiling}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs uppercase text-muted">Confidence</div>
-            <div className="text-2xl font-semibold tabular-nums">
+            <div className="label-strip">Confidence</div>
+            <div className="font-display text-3xl font-semibold tabular text-content">
               {(estimate.overallConfidence * 100).toFixed(0)}%
             </div>
           </div>
+          <div className="w-full">
+            <Badge tone={recTone}>{estimate.submissionRecommendation}</Badge>
+          </div>
         </div>
-        <div className="mt-3">
-          <Badge tone={estimate.submissionRecommendation.includes('Strong') ? 'positive' : 'neutral'}>
-            {estimate.submissionRecommendation}
-          </Badge>
-        </div>
-      </Card>
+      </div>
 
       <Card>
         <CardTitle>Condition sub-scores</CardTitle>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <ScoreBar label="Centering" value={scores.centering} />
-          <ScoreBar label="Corners" value={scores.corner} />
-          <ScoreBar label="Edges" value={scores.edge} />
-          <ScoreBar label="Surface" value={scores.surface} />
-          <ScoreBar label="Structural" value={scores.structural} />
-          <ScoreBar label="Image quality" value={scores.imageQuality} />
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {(Object.keys(SCORE_META) as (keyof Scores)[]).map((k) => (
+            <ScoreBar key={k} metaKey={k} value={scores[k]} />
+          ))}
         </div>
       </Card>
 
@@ -196,9 +220,12 @@ function GradeReport({ report, onReset }: { report: Report; onReset: () => void 
           {estimate.limitingDefects.length > 0 && (
             <Card>
               <CardTitle>Factors limiting the grade</CardTitle>
-              <ul className="mt-2 space-y-1 text-sm text-muted">
+              <ul className="mt-3 space-y-1.5 text-sm text-muted">
                 {estimate.limitingDefects.map((d, i) => (
-                  <li key={i}>• {d}</li>
+                  <li key={i} className="flex gap-2">
+                    <span className="text-negative">▸</span>
+                    {d}
+                  </li>
                 ))}
               </ul>
             </Card>
@@ -206,9 +233,12 @@ function GradeReport({ report, onReset }: { report: Report; onReset: () => void 
           {estimate.suggestedRecaptures.length > 0 && (
             <Card>
               <CardTitle>Recommended recaptures</CardTitle>
-              <ul className="mt-2 space-y-1 text-sm text-muted">
+              <ul className="mt-3 space-y-1.5 text-sm text-muted">
                 {estimate.suggestedRecaptures.map((d, i) => (
-                  <li key={i}>• {d}</li>
+                  <li key={i} className="flex gap-2">
+                    <span className="text-accent">▸</span>
+                    {d}
+                  </li>
                 ))}
               </ul>
             </Card>
@@ -216,9 +246,7 @@ function GradeReport({ report, onReset }: { report: Report; onReset: () => void 
         </div>
       )}
 
-      <div className="text-xs text-muted">
-        Model {report.modelVersion}. Analyzed just now from demo captures.
-      </div>
+      <div className="label-strip">Model {report.modelVersion} · analyzed just now from demo captures</div>
       <GradeDisclaimer />
     </div>
   );
