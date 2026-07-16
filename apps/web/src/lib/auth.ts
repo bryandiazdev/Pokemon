@@ -24,18 +24,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       isDemo: true,
     };
   }
-  const supabase = await getServerSupabase();
-  if (!supabase) return null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  return {
-    id: user.id,
-    email: user.email ?? '',
-    displayName: (user.user_metadata?.display_name as string) ?? user.email ?? 'Collector',
-    isDemo: false,
-  };
+  try {
+    const supabase = await getServerSupabase();
+    if (!supabase) return null;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.email ?? '',
+      displayName: (user.user_metadata?.display_name as string) ?? user.email ?? 'Collector',
+      isDemo: false,
+    };
+  } catch (err) {
+    // A transient Supabase/auth failure must never 500 a page — treat as logged out.
+    // eslint-disable-next-line no-console
+    console.error('[auth] getCurrentUser failed; treating as unauthenticated:', err);
+    return null;
+  }
 }
 
 /** For protected routes: return the user or throw an auth sentinel. */

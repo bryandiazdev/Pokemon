@@ -11,8 +11,10 @@ describe('env validation', () => {
     expect(env.NEXT_PUBLIC_APP_URL).toBe('http://localhost:3000');
   });
 
-  it('requires supabase in live mode', () => {
-    expect(() => loadEnv({ DATA_MODE: 'live' })).toThrow(/Supabase/i);
+  it('degrades live→demo (never throws) when Supabase is missing', () => {
+    // Runtime resilience: a misconfigured DATA_MODE=live must not brick the app.
+    const env = loadEnv({ DATA_MODE: 'live' });
+    expect(env.DATA_MODE).toBe('demo');
   });
 
   it('accepts live mode when supabase is present', () => {

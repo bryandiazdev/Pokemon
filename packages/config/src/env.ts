@@ -91,28 +91,27 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-/** Cross-field checks that depend on DATA_MODE. */
-function refineForLiveMode(env: Env): string[] {
-  if (env.DATA_MODE !== 'live') return [];
-  const errors: string[] = [];
-  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    errors.push('DATA_MODE=live requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
+/**
+ * Reconcile cross-field constraints WITHOUT ever throwing.
+ *
+ * A misconfigured env must never brick the app at runtime (Next.js loads this
+ * lazily per dynamic route, so a throw here 500s pages one-by-one). Instead we
+ * gracefully downgrade to demo mode and warn. Genuinely malformed values (wrong
+ * types) are still rejected by the Zod parse below — that is a real boot error.
+ */
+function reconcile(env: Env): Env {
+  if (
+    env.DATA_MODE === 'live' &&
+    (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  ) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[config] DATA_MODE=live but NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY ' +
+        'are not set — falling back to demo mode. Configure Supabase to enable live accounts.',
+    );
+    return { ...env, DATA_MODE: 'demo' };
   }
-  const needsKey: Array<[keyof Env, keyof Env]> = [
-    ['CATALOG_PROVIDER', 'POKEMON_TCG_API_KEY'],
-    ['RAW_PRICING_PROVIDER', 'PRICECHARTING_API_KEY'],
-  ];
-  for (const [selector, key] of needsKey) {
-    const provider = env[selector];
-    if (provider === 'pokemontcg' && selector === 'CATALOG_PROVIDER' && !env.POKEMON_TCG_API_KEY) {
-      // Pokémon TCG API works without a key but rate-limits hard; warn only.
-      continue;
-    }
-    if (provider === 'pricecharting' && !env[key]) {
-      errors.push(`Provider ${provider} selected for ${selector} but ${String(key)} is missing`);
-    }
-  }
-  return errors;
+  return env;
 }
 
 let cached: Env | null = null;
@@ -127,11 +126,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       .join('\n');
     throw new Error(`Invalid environment variables:\n${lines}`);
   }
-  const liveErrors = refineForLiveMode(parsed.data);
-  if (liveErrors.length > 0) {
-    throw new Error(`Invalid environment for DATA_MODE=live:\n  - ${liveErrors.join('\n  - ')}`);
-  }
-  cached = parsed.data;
+  cached = reconcile(parsed.data);
   return cached;
 }
 
