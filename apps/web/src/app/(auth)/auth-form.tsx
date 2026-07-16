@@ -24,17 +24,27 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
       return;
     }
     setLoading(true);
-    const fn = isSignUp
-      ? supabase.auth.signUp({ email, password })
-      : supabase.auth.signInWithPassword({ email, password });
-    const { error } = await fn;
+    const { data, error } = isSignUp
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        })
+      : await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
       setMessage(error.message);
       return;
     }
-    if (isSignUp) setMessage('Check your email to verify your account.');
-    else router.push('/app');
+    // When a session is issued (email confirmation disabled), go straight in.
+    if (data.session) {
+      router.push('/app');
+      router.refresh();
+      return;
+    }
+    setMessage(
+      isSignUp ? 'Check your email to verify your account.' : 'Check your email to continue.',
+    );
   }
 
   async function magicLink() {

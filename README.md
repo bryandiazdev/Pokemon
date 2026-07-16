@@ -70,14 +70,40 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
-Optional — a real database (auth + persistence):
+### Full real setup — accounts + persistence (verified end-to-end)
+
+Real sign-up, sessions, and saved collections/scans need Supabase. Local Supabase
+(Docker) makes this a one-time setup — no cloud account required:
 
 ```bash
-supabase start                 # Supabase CLI + Docker
-export DATABASE_URL=postgres://postgres:postgres@localhost:54322/postgres
-pnpm db:migrate && pnpm db:seed
-# set NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY / SUPABASE_SERVICE_ROLE_KEY, DATA_MODE=live
+supabase start                 # Supabase CLI + Docker (this repo's config.toml)
+supabase status                # copy the API URL + publishable/secret keys
+
+# apply the 12 migrations (schema + RLS + signup trigger) to the local DB:
+for f in packages/database/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
 ```
+
+Then put the values from `supabase status` into `apps/web/.env.local`:
+
+```bash
+DATA_MODE=live
+PROVIDER_PRESET=tcgdex                       # free live cards + prices
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55322/postgres
+RECOGNITION_PROVIDER=catalog-ocr             # on-device OCR scanner
+```
+
+`pnpm dev`, then create an account at `/sign-up`. The signup trigger provisions
+your profile, entitlements, and default collection; the camera scanner reads the
+card with on-device OCR, matches it against the live catalog, and saves confirmed
+cards to your own RLS-scoped collection, valued at live prices.
+
+> This repo's `supabase/config.toml` uses ports `5532x` (offset from the default
+> `5432x`) so it can coexist with another local Supabase project on the same
+> machine. Adjust if you like. Local email confirmation is disabled for dev;
+> enable it (and the `/auth/callback` flow, already implemented) in production.
 
 ## Scripts
 

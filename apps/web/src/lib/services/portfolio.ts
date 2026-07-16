@@ -1,6 +1,8 @@
 import 'server-only';
 import { DEMO_COLLECTION_ITEMS } from '@psr/testing';
 import { getRegistry } from '../providers';
+import { getCurrentUser } from '../auth';
+import { listCollectionItems } from './collection';
 import {
   money,
   addMoney,
@@ -9,6 +11,8 @@ import {
   zeroMoney,
   pctChange,
   type Money,
+  type RawCondition,
+  type GradingCompany,
 } from '@psr/types';
 
 /**
@@ -49,47 +53,122 @@ export interface PortfolioSummary {
 
 const CURRENCY = 'USD';
 
-async function unitValueFor(item: (typeof DEMO_COLLECTION_ITEMS)[number]): Promise<Money> {
-  const registry = getRegistry();
-  if (item.ownershipType === 'graded' && item.gradingCompany && item.grade) {
-    const graded = await registry.call('gradedPricing', 'getCurrentGradedPrices', (a) =>
-      a.getCurrentGradedPrices({ cardExternalId: item.cardExternalId, gradingCompany: item.gradingCompany }),
-    );
-    const match = graded.find((g) => g.grade === item.grade) ?? graded[0];
-    return money(match?.valueMinor ?? 0, CURRENCY);
-  }
-  const raw = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
-    a.getCurrentRawPrices({ cardExternalId: item.cardExternalId }),
-  );
-  const cond = 'rawCondition' in item ? item.rawCondition : 'near_mint';
-  const match = raw.find((r) => r.condition === cond) ?? raw.find((r) => r.condition === 'near_mint');
-  return money(match?.valueMinor ?? 0, CURRENCY);
+interface ValuationInput {
+  id: string;
+  cardExternalId: string | null;
+  name: string;
+  quantity: number;
+  ownershipType: 'raw' | 'graded';
+  rawCondition?: RawCondition | null;
+  gradingCompany?: GradingCompany | null;
+  grade?: string | null;
+  purchasePriceMinor: number;
+  gradeLabel: string | null;
 }
 
-export async function getPortfolioSummary(): Promise<PortfolioSummary> {
+async function unitValueFor(item: ValuationInput): Promise<Money> {
+  if (!item.cardExternalId) return money(0, CURRENCY);
+  const registry = getRegistry();
+  try {
+    if (item.ownershipType === 'graded' && item.gradingCompany && item.grade) {
+      const graded = await registry.call('gradedPricing', 'getCurrentGradedPrices', (a) =>
+        a.getCurrentGradedPrices({
+          cardExternalId: item.cardExternalId!,
+          gradingCompany: item.gradingCompany!,
+        }),
+      );
+      const match = graded.find((g) => g.grade === item.grade) ?? graded[0];
+      return money(match?.valueMinor ?? 0, CURRENCY);
+    }
+    const raw = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
+      a.getCurrentRawPrices({ cardExternalId: item.cardExternalId! }),
+    );
+    // Prefer a USD (TCGplayer) market price for the requested condition.
+    const usd = raw.filter((r) => r.currency === CURRENCY);
+    const pool = usd.length > 0 ? usd : raw;
+    const match =
+      pool.find((r) => r.condition === (item.rawCondition ?? 'near_mint')) ??
+      pool.find((r) => r.condition === 'near_mint') ??
+      pool[0];
+    return money(match?.valueMinor ?? 0, match?.currency ?? CURRENCY);
+  } catch {
+    // Provider hiccup: value at zero rather than failing the whole dashboard.
+    return money(0, CURRENCY);
+  }
+}
+
+async function valueItems(inputs: ValuationInput[]): Promise<ValuedItem[]> {
   const valued: ValuedItem[] = [];
-  for (const item of DEMO_COLLECTION_ITEMS) {
+  for (const item of inputs) {
     const unit = await unitValueFor(item);
     const line = mulMoney(unit, item.quantity);
     const cost = money(item.purchasePriceMinor * item.quantity, CURRENCY);
-    const gain = subMoney(line, cost);
     valued.push({
       id: item.id,
-      cardExternalId: item.cardExternalId,
-      name: cardName(item.cardExternalId),
+      cardExternalId: item.cardExternalId ?? '',
+      name: item.name,
       quantity: item.quantity,
       ownershipType: item.ownershipType,
-      gradeLabel:
-        item.ownershipType === 'graded' && 'gradingCompany' in item
-          ? `${item.gradingCompany?.toUpperCase()} ${item.grade}`
-          : ('rawCondition' in item ? conditionLabel(item.rawCondition) : null),
+      gradeLabel: item.gradeLabel,
       unitValue: unit,
       lineValue: line,
       costBasis: cost,
-      gain,
+      gain: subMoney(line, cost),
       gainPct: pctChange(cost, line),
     });
   }
+  return valued;
+}
+
+/** Live inputs from the signed-in user's real collection_items. */
+async function liveInputs(userId: string): Promise<ValuationInput[]> {
+  const items = await listCollectionItems(userId);
+  return items.map((i) => ({
+    id: i.id,
+    cardExternalId: i.cardExternalId,
+    name: i.setName ? `${i.name} — ${i.setName}` : i.name,
+    quantity: i.quantity,
+    ownershipType: i.ownershipType,
+    rawCondition: i.rawCondition,
+    gradingCompany: i.gradingCompany,
+    grade: i.grade,
+    purchasePriceMinor: i.purchasePriceMinor,
+    gradeLabel:
+      i.ownershipType === 'graded'
+        ? `${i.gradingCompany?.toUpperCase() ?? ''} ${i.grade ?? ''}`.trim()
+        : i.rawCondition
+          ? conditionLabel(i.rawCondition)
+          : null,
+  }));
+}
+
+/** Demo inputs from the seeded fixtures. */
+function demoInputs(): ValuationInput[] {
+  return DEMO_COLLECTION_ITEMS.map((item) => ({
+    id: item.id,
+    cardExternalId: item.cardExternalId,
+    name: cardName(item.cardExternalId),
+    quantity: item.quantity,
+    ownershipType: item.ownershipType,
+    rawCondition: 'rawCondition' in item ? item.rawCondition : null,
+    gradingCompany: 'gradingCompany' in item ? item.gradingCompany : null,
+    grade: 'grade' in item ? item.grade : null,
+    purchasePriceMinor: item.purchasePriceMinor,
+    gradeLabel:
+      item.ownershipType === 'graded' && 'gradingCompany' in item
+        ? `${item.gradingCompany?.toUpperCase()} ${item.grade}`
+        : 'rawCondition' in item
+          ? conditionLabel(item.rawCondition)
+          : null,
+  }));
+}
+
+export async function getPortfolioSummary(): Promise<PortfolioSummary> {
+  const user = await getCurrentUser();
+  const live = Boolean(user && !user.isDemo);
+  const inputs = live ? await liveInputs(user!.id) : demoInputs();
+  const valued = await valueItems(inputs);
+  const freshness: PortfolioSummary['freshness'] = live ? 'live' : 'demo';
 
   const zero = zeroMoney(CURRENCY);
   const totalMarketValue = valued.reduce((acc, v) => addMoney(acc, v.lineValue), zero);
@@ -114,7 +193,7 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
     gradedCount: valued.filter((v) => v.ownershipType === 'graded').reduce((n, v) => n + v.quantity, 0),
     rawCount: valued.filter((v) => v.ownershipType === 'raw').reduce((n, v) => n + v.quantity, 0),
     items: valued,
-    freshness: 'demo',
+    freshness,
   };
 }
 

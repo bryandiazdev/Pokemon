@@ -18,13 +18,20 @@ const nextConfig = {
     ],
   },
   async headers() {
+    // Allow the configured Supabase origin (incl. local http://127.0.0.1:port and
+    // its websocket) so the browser auth/realtime clients can reach it. Hosted
+    // Supabase (https) is already covered by the `https:`/`wss:` sources.
+    const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+    const supabaseWs = supabaseOrigin.replace(/^http/, 'ws');
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https:",
+      // blob: worker + wasm for on-device OCR (Tesseract.js); https for its assets.
+      "worker-src 'self' blob:",
+      `connect-src 'self' https: wss: blob: ${supabaseOrigin} ${supabaseWs}`.trim(),
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

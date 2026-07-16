@@ -6,6 +6,15 @@ import { getEntitlementContext, checkQuickScan } from '@/lib/services/entitlemen
 const bodySchema = z.object({
   // A short-lived reference (data URL length-limited) — never a public bucket path.
   imageRef: z.string().min(1).max(2_000_000),
+  // On-device OCR text (name/number) extracted from the photo by the scanner.
+  ocr: z
+    .object({
+      name: z.string().max(120).optional(),
+      number: z.string().max(24).optional(),
+      setName: z.string().max(120).optional(),
+      rawText: z.string().max(4000).optional(),
+    })
+    .optional(),
   // Client-computed quality gate results; the server re-decides acceptance.
   quality: z
     .object({
@@ -46,7 +55,7 @@ export const POST = withErrorHandling(async (req: Request) => {
   }
 
   const result = await getRegistry().call('recognition', 'identifyCard', (a) =>
-    a.identifyCard({ imageRef: parsed.value.imageRef }),
+    a.identifyCard({ imageRef: parsed.value.imageRef, ocr: parsed.value.ocr }),
   );
 
   const top = result.candidates[0];
