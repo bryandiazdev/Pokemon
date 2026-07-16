@@ -1,21 +1,38 @@
 'use client';
-import { useState } from 'react';
+
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { GradeDisclaimer } from '@/components/disclaimer';
 import { RadarMark } from '@/components/brand';
-import { CheckCircle2, Circle, Camera, RotateCcw } from 'lucide-react';
+import { compressImageFile } from '@/lib/image-compress';
+import {
+  CheckCircle2,
+  Circle,
+  Camera,
+  Upload,
+  RotateCcw,
+  X,
+  ImageIcon,
+} from 'lucide-react';
 
 const CAPTURES = [
-  { key: 'front', label: 'Front — straight on', required: true },
-  { key: 'back', label: 'Back — straight on', required: true },
-  { key: 'front_angled', label: 'Front — angled light', required: true },
-  { key: 'corner_tl', label: 'Top-left corner', required: false },
-  { key: 'corner_tr', label: 'Top-right corner', required: false },
-  { key: 'corner_bl', label: 'Bottom-left corner', required: false },
-  { key: 'corner_br', label: 'Bottom-right corner', required: false },
-];
+  { key: 'front', label: 'Front — straight on', hint: 'Card flat, camera parallel, full card in frame', required: true },
+  { key: 'back', label: 'Back — straight on', hint: 'Same framing as the front', required: true },
+  { key: 'front_angled', label: 'Front — angled light', hint: 'Tilt light to reveal surface scratches', required: true },
+  { key: 'corner_tl', label: 'Top-left corner', hint: 'Optional close-up', required: false },
+  { key: 'corner_tr', label: 'Top-right corner', hint: 'Optional close-up', required: false },
+  { key: 'corner_bl', label: 'Bottom-left corner', hint: 'Optional close-up', required: false },
+  { key: 'corner_br', label: 'Bottom-right corner', hint: 'Optional close-up', required: false },
+] as const;
+
+type CaptureKey = (typeof CAPTURES)[number]['key'];
+
+interface CaptureSlot {
+  file: File;
+  previewUrl: string;
+}
 
 interface Estimate {
   estimatedMinGrade: number;
@@ -40,36 +57,112 @@ interface Report {
   disclaimer: string;
   modelVersion: string;
   remaining: number | null;
+  captures?: string[];
 }
 
 export function GradeClient() {
-  const [captured, setCaptured] = useState<Set<string>>(new Set());
+  const [slots, setSlots] = useState<Partial<Record<CaptureKey, CaptureSlot>>>({});
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [activeKey, setActiveKey] = useState<CaptureKey | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const requiredDone = CAPTURES.filter((c) => c.required).every((c) => captured.has(c.key));
+  const requiredDone = CAPTURES.filter((c) => c.required).every((c) => slots[c.key]);
+  const uploadedCount = Object.keys(slots).length;
 
-  function toggle(key: string) {
-    setCaptured((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+  function openPicker(key: CaptureKey) {
+    setActiveKey(key);
+    // Reset so choosing the same file again still fires onChange.
+    if (fileRef.current) fileRef.current.value = '';
+    fileRef.current?.click();
+  }
+
+  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const key = activeKey;
+    const raw = e.target.files?.[0];
+    setActiveKey(null);
+    if (!key || !raw) return;
+    if (!raw.type.startsWith('image/')) {
+      setError('Please choose a photo (JPEG, PNG, or WebP).');
+      return;
+    }
+
+    setError('');
+    try {
+      const file = await compressImageFile(raw);
+      const previewUrl = URL.createObjectURL(file);
+      setSlots((prev) => {
+        const existing = prev[key];
+        if (existing) URL.revokeObjectURL(existing.previewUrl);
+        return { ...prev, [key]: { file, previewUrl } };
+      });
+    } catch {
+      setError('Could not read that photo. Try another image.');
+    }
+  }
+
+  function clearSlot(key: CaptureKey) {
+    setSlots((prev) => {
+      const existing = prev[key];
+      if (existing) URL.revokeObjectURL(existing.previewUrl);
+      const next = { ...prev };
+      delete next[key];
       return next;
     });
   }
 
-  async function runAnalysis() {
-    setLoading(true);
-    const res = await fetch('/api/grade/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardExternalId: 'base1-4' }),
+  function resetAll() {
+    setSlots((prev) => {
+      for (const slot of Object.values(prev)) {
+        if (slot) URL.revokeObjectURL(slot.previewUrl);
+      }
+      return {};
     });
-    const body = await res.json();
-    setLoading(false);
-    if (body.success) setReport(body.data);
+    setReport(null);
+    setError('');
   }
 
-  if (report) return <GradeReport report={report} onReset={() => setReport(null)} />;
+  async function runAnalysis() {
+    if (!requiredDone) return;
+    setLoading(true);
+    setError('');
+
+    const form = new FormData();
+    for (const cap of CAPTURES) {
+      const slot = slots[cap.key];
+      if (!slot) continue;
+      form.append('files', slot.file, `${cap.key}.jpg`);
+      form.append('capture_types', cap.key);
+    }
+    form.append('cardExternalId', 'base1-4');
+
+    try {
+      const res = await fetch('/api/grade/analyze', { method: 'POST', body: form });
+      const body = await res.json();
+      if (!body.success) {
+        setError(body.error?.message ?? 'Analysis failed. Please try again.');
+        return;
+      }
+      setReport(body.data);
+    } catch {
+      setError('Network error — check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (report) {
+    return (
+      <GradeReport
+        report={report}
+        onReset={() => {
+          setReport(null);
+        }}
+        onNew={() => resetAll()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -78,8 +171,8 @@ export function GradeClient() {
         <ul className="mt-3 space-y-1.5 text-sm text-muted">
           <li>· Remove the card from sleeves and top loaders.</li>
           <li>· Use a clean, dark, non-reflective background and bright indirect light.</li>
-          <li>· Clean the camera lens; keep the card flat and the camera parallel.</li>
-          <li>· Avoid fingers over corners and edges; don’t apply filters.</li>
+          <li>· Keep the card flat and the camera parallel (except the angled shot).</li>
+          <li>· Upload from your camera roll or take a new photo — avoid filters.</li>
         </ul>
       </Card>
 
@@ -87,47 +180,119 @@ export function GradeClient() {
         <CardHeader>
           <CardTitle>Guided captures</CardTitle>
           <Badge tone={requiredDone ? 'positive' : 'neutral'}>
-            {captured.size}/{CAPTURES.length}
+            {uploadedCount}/{CAPTURES.length}
           </Badge>
         </CardHeader>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          onChange={onFileChange}
+          aria-hidden
+          tabIndex={-1}
+        />
+
         <ul className="grid gap-2 sm:grid-cols-2">
           {CAPTURES.map((c) => {
-            const done = captured.has(c.key);
+            const slot = slots[c.key];
+            const done = Boolean(slot);
             return (
               <li key={c.key}>
-                <button
-                  type="button"
-                  onClick={() => toggle(c.key)}
-                  className={`flex w-full items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors ${
+                <div
+                  className={`overflow-hidden rounded-lg border transition-colors ${
                     done
                       ? 'border-accent/40 bg-accent/5'
                       : 'border-border hover:border-border-strong'
                   }`}
                 >
-                  {done ? (
-                    <CheckCircle2 size={18} className="text-positive" />
-                  ) : (
-                    <Circle size={18} className="text-faint" />
+                  <button
+                    type="button"
+                    onClick={() => openPicker(c.key)}
+                    className="flex w-full items-start gap-3 p-3 text-left"
+                  >
+                    <span className="mt-0.5 shrink-0">
+                      {done ? (
+                        <CheckCircle2 size={18} className="text-positive" />
+                      ) : (
+                        <Circle size={18} className="text-faint" />
+                      )}
+                    </span>
+
+                    {slot ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={slot.previewUrl}
+                        alt={`${c.label} preview`}
+                        className="h-14 w-11 shrink-0 rounded object-cover ring-1 ring-border"
+                      />
+                    ) : (
+                      <span className="flex h-14 w-11 shrink-0 items-center justify-center rounded bg-bg text-faint ring-1 ring-border">
+                        <ImageIcon size={16} aria-hidden />
+                      </span>
+                    )}
+
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-content">{c.label}</span>
+                        {c.required && !done && <Badge tone="warning">REQ</Badge>}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted">{c.hint}</span>
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent">
+                        {done ? (
+                          <>
+                            <Camera size={12} aria-hidden />
+                            Replace photo
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={12} aria-hidden />
+                            Take or upload photo
+                          </>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+
+                  {done && (
+                    <div className="flex justify-end border-t border-border/60 px-3 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => clearSlot(c.key)}
+                        className="inline-flex items-center gap-1 text-xs text-muted hover:text-negative"
+                      >
+                        <X size={12} aria-hidden />
+                        Remove
+                      </button>
+                    </div>
                   )}
-                  <span className="flex-1">{c.label}</span>
-                  {c.required && !done && <Badge tone="warning">REQ</Badge>}
-                  <Camera size={15} className="text-faint" />
-                </button>
+                </div>
               </li>
             );
           })}
         </ul>
+
         <p className="mt-3 text-xs text-muted">
-          Tap a capture to simulate taking it (demo). On a device, each opens the camera with an
-          on-screen quality check that rejects blur, glare, and poor coverage.
+          Required shots: front, back, and angled light. Corner close-ups are optional but improve
+          corner scoring when a live vision service is connected.
         </p>
       </Card>
 
+      {error && (
+        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          {error}
+        </p>
+      )}
+
       <Button variant="holo" onClick={runAnalysis} disabled={!requiredDone || loading}>
-        {loading ? 'Analyzing…' : 'Run Grade Potential analysis'}
+        {loading ? 'Analyzing photos…' : 'Run Grade Potential analysis'}
       </Button>
       {!requiredDone && (
-        <p className="text-xs text-muted">Complete the required captures to run the analysis.</p>
+        <p className="text-xs text-muted">
+          Upload the three required photos to run the analysis.
+        </p>
       )}
     </div>
   );
@@ -161,22 +326,35 @@ function ScoreBar({ metaKey, value }: { metaKey: keyof Scores; value: number }) 
   );
 }
 
-function GradeReport({ report, onReset }: { report: Report; onReset: () => void }) {
+function GradeReport({
+  report,
+  onReset,
+  onNew,
+}: {
+  report: Report;
+  onReset: () => void;
+  onNew: () => void;
+}) {
   const { estimate, scores } = report;
   const strong = estimate.submissionRecommendation.includes('Strong');
   const possible = estimate.submissionRecommendation.includes('Possible');
   const recTone = strong ? 'positive' : possible ? 'gold' : 'neutral';
+  const live = report.modelVersion.includes('vision') && !report.modelVersion.includes('demo');
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-xl font-semibold">Grade Potential report</h2>
-        <Button variant="ghost" size="sm" onClick={onReset}>
-          <RotateCcw size={14} /> New analysis
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={onReset}>
+            Back to photos
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onNew}>
+            <RotateCcw size={14} /> New analysis
+          </Button>
+        </div>
       </div>
 
-      {/* Headline result — styled as a grading "slab label". */}
       <div className="slab hairline-top holo group overflow-hidden">
         <div className="flex items-center justify-between gap-2 border-b border-border bg-bg-deep/60 px-5 py-3">
           <span className="label-strip text-accent">Estimated PSA range · not a guarantee</span>
@@ -190,9 +368,7 @@ function GradeReport({ report, onReset }: { report: Report; onReset: () => void 
                 {estimate.estimatedMinGrade}–{estimate.estimatedMaxGrade}
               </span>
             </div>
-            <div className="mt-2 label-strip">
-              Ceiling · PSA {estimate.estimatedCeiling}
-            </div>
+            <div className="mt-2 label-strip">Ceiling · PSA {estimate.estimatedCeiling}</div>
           </div>
           <div className="text-right">
             <div className="label-strip">Confidence</div>
@@ -246,7 +422,13 @@ function GradeReport({ report, onReset }: { report: Report; onReset: () => void 
         </div>
       )}
 
-      <div className="label-strip">Model {report.modelVersion} · analyzed just now from demo captures</div>
+      <div className="label-strip">
+        Model {report.modelVersion} · analyzed from{' '}
+        {(report.captures?.length ?? 0) > 0
+          ? `${report.captures!.length} uploaded capture${report.captures!.length === 1 ? '' : 's'}`
+          : 'uploads'}
+        {live ? '' : ' · demo scoring (connect VISION_SERVICE_URL for live CV)'}
+      </div>
       <GradeDisclaimer />
     </div>
   );

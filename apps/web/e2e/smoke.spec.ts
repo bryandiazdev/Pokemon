@@ -48,12 +48,30 @@ test('dashboard shows portfolio value in demo mode', async ({ page }) => {
   await expect(page.getByText(/Collection value over time/i)).toBeVisible();
 });
 
-test('grade flow gates on required captures and produces a report', async ({ page }) => {
+test('grade flow gates on required photo uploads and produces a report', async ({ page }) => {
   await page.goto('/app/grade');
   const runButton = page.getByRole('button', { name: /Run Grade Potential analysis/i });
   await expect(runButton).toBeDisabled();
-  await page.getByText('Front — straight on').click();
-  await page.getByText('Back — straight on').click();
-  await page.getByText('Front — angled light').click();
+
+  // 1×1 PNG — enough to satisfy the upload gate in demo mode.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  for (const label of ['Front — straight on', 'Back — straight on', 'Front — angled light']) {
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.getByRole('button', { name: new RegExp(label, 'i') }).click(),
+    ]);
+    await chooser.setFiles({
+      name: `${label}.png`,
+      mimeType: 'image/png',
+      buffer: png,
+    });
+  }
+
   await expect(runButton).toBeEnabled();
+  await runButton.click();
+  await expect(page.getByText(/Grade Potential report/i)).toBeVisible({ timeout: 15_000 });
 });
