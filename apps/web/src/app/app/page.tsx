@@ -23,7 +23,7 @@ export default async function DashboardPage() {
       <DataModeBanner />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Your collection</h1>
+        <h1 className="font-display text-2xl font-semibold">Your collection</h1>
         <div className="flex gap-2">
           <Link
             href="/app/scan"

@@ -75,7 +75,7 @@ export default function PricingPage() {
           {/* Free */}
           <Card className="flex flex-col">
             <Badge tone="neutral">Free</Badge>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-content">
+            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-content">
               $0<span className="text-base font-normal text-muted">/month</span>
             </h2>
             <p className="mt-2 text-sm text-muted">
@@ -103,7 +103,7 @@ export default function PricingPage() {
               <Badge tone="gold">Collector Pro</Badge>
               <Badge tone="info">Most popular</Badge>
             </div>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-content">
+            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-content">
               {monthly}
               <span className="text-base font-normal text-muted">/month</span>
             </h2>

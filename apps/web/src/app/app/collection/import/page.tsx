@@ -7,7 +7,7 @@ export default function ImportPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Import collection</h1>
+        <h1 className="font-display text-2xl font-semibold">Import collection</h1>
         <p className="text-muted">Upload a CSV, map your columns, preview, then import.</p>
       </div>
       <Card className="space-y-4">

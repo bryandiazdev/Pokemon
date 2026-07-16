@@ -24,7 +24,7 @@ export default async function WatchlistPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Watchlist</h1>
+        <h1 className="font-display text-2xl font-semibold">Watchlist</h1>
         <FreshnessBadge freshness="demo" />
       </div>
       <Card>

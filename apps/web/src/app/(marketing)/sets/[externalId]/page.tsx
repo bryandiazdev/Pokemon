@@ -40,7 +40,7 @@ export default async function SetPage({ params }: Params) {
 
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">{set.name}</h1>
+          <h1 className="font-display text-2xl font-semibold">{set.name}</h1>
           <p className="text-muted">
             {set.series} · {set.releaseDate?.slice(0, 4)} · {set.total ?? set.printedTotal} cards
           </p>

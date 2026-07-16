@@ -8,21 +8,22 @@ export function Badge({
   tone = 'neutral',
   ...props
 }: React.HTMLAttributes<HTMLSpanElement> & {
-  tone?: 'neutral' | 'positive' | 'negative' | 'warning' | 'info' | 'gold' | 'demo';
+  tone?: 'neutral' | 'positive' | 'negative' | 'warning' | 'info' | 'gold' | 'demo' | 'accent';
 }) {
   const tones: Record<string, string> = {
     neutral: 'bg-surface-elevated text-muted border-border',
-    positive: 'bg-positive/15 text-positive border-positive/30',
-    negative: 'bg-negative/15 text-negative border-negative/30',
-    warning: 'bg-warning/15 text-warning border-warning/30',
-    info: 'bg-info/15 text-info border-info/30',
-    gold: 'bg-gold/15 text-gold border-gold/30',
-    demo: 'bg-demo/15 text-demo border-demo/30',
+    accent: 'bg-accent/12 text-accent border-accent/30',
+    positive: 'bg-positive/12 text-positive border-positive/30',
+    negative: 'bg-negative/12 text-negative border-negative/30',
+    warning: 'bg-warning/12 text-warning border-warning/30',
+    info: 'bg-info/12 text-info border-info/30',
+    gold: 'bg-gold/12 text-gold border-gold/30',
+    demo: 'bg-demo/12 text-demo border-demo/30',
   };
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[0.68rem] tracking-wide',
         tones[tone],
         className,
       )}
@@ -33,7 +34,7 @@ export function Badge({
 
 /**
  * Freshness badge — honestly labels where a datum came from. Uses BOTH color and
- * text (never color alone) for accessibility.
+ * text (never color alone) for accessibility. A small dot reinforces status.
  */
 export function FreshnessBadge({ freshness }: { freshness: DataFreshness }) {
   const tone =
@@ -46,6 +47,16 @@ export function FreshnessBadge({ freshness }: { freshness: DataFreshness }) {
           : 'info';
   return (
     <Badge tone={tone} title={`Data source: ${FRESHNESS_LABEL[freshness]}`}>
+      <span
+        aria-hidden
+        className={cn(
+          'inline-block h-1.5 w-1.5 rounded-full',
+          freshness === 'live' && 'bg-positive',
+          freshness === 'stale' && 'bg-warning',
+          freshness === 'demo' && 'bg-demo',
+          (freshness === 'snapshot' || freshness === 'estimated') && 'bg-info',
+        )}
+      />
       {FRESHNESS_LABEL[freshness]}
     </Badge>
   );

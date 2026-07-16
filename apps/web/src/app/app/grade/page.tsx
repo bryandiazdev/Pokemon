@@ -7,7 +7,7 @@ export default function GradePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold">Grade Potential</h1>
+        <h1 className="font-display text-2xl font-semibold">Grade Potential</h1>
         <p className="text-muted">
           A guided, computer-vision condition analysis to help you decide whether to submit — an
           estimate, never a guarantee.

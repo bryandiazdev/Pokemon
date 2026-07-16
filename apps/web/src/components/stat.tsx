@@ -1,29 +1,46 @@
 import { cn } from '@psr/ui';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 
+/**
+ * Stat tile styled like a graded-slab label: a mono uppercase caption strip, a
+ * large editorial value, and a signed delta. The optional accent bar tints the
+ * left edge (era/category color).
+ */
 export function Stat({
   label,
   value,
   sub,
   delta,
+  accent,
   className,
 }: {
   label: string;
   value: string;
   sub?: string;
   delta?: number | null;
+  accent?: string;
   className?: string;
 }) {
-  const tone = delta == null ? 'neutral' : delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+  const tone =
+    delta == null ? 'neutral' : delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
   return (
-    <div className={cn('rounded-xl border border-border bg-surface p-4', className)}>
-      <div className="text-xs font-medium uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-content">{value}</div>
-      <div className="mt-1 flex items-center gap-2 text-xs">
+    <div className={cn('card-surface hairline-top relative overflow-hidden p-4', className)}>
+      {accent && (
+        <span
+          aria-hidden
+          className="absolute inset-y-3 left-0 w-0.5 rounded-full"
+          style={{ background: accent }}
+        />
+      )}
+      <div className="label-strip">{label}</div>
+      <div className="mt-2 font-display text-[1.7rem] font-semibold leading-none tabular text-content">
+        {value}
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs">
         {delta != null && tone !== 'neutral' && (
           <span
             className={cn(
-              'inline-flex items-center gap-0.5 font-medium',
+              'inline-flex items-center gap-0.5 font-mono font-medium',
               tone === 'positive' ? 'text-positive' : 'text-negative',
             )}
           >

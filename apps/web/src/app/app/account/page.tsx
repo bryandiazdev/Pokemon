@@ -13,7 +13,7 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <h1 className="text-2xl font-semibold">Account</h1>
+      <h1 className="font-display text-2xl font-semibold">Account</h1>
 
       <Card>
         <CardTitle>Profile</CardTitle>

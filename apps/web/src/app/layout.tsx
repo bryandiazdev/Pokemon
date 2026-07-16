@@ -1,7 +1,31 @@
 import type { Metadata, Viewport } from 'next';
+import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { PwaRegister } from '@/components/pwa-register';
+
+// Editorial display serif (headlines + large values), a warm UI grotesk, and a
+// monospace for market data / prices / cert numbers — the "terminal for
+// collectors" pairing that reads as bespoke, not a stock template.
+const display = Fraunces({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '900'],
+  style: ['normal', 'italic'],
+  variable: '--font-display',
+  display: 'swap',
+});
+const sans = Hanken_Grotesk({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://pokemonstockradar.com'),
@@ -23,7 +47,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0b0e12',
+  themeColor: '#0a0b12',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -31,7 +55,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${display.variable} ${sans.variable} ${mono.variable}`}
+    >
       <body className="font-sans antialiased">
         <a
           href="#main"

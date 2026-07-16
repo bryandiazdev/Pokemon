@@ -15,7 +15,7 @@ export default async function CollectionPage() {
     <div className="mx-auto max-w-6xl space-y-5">
       <DataModeBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Collection</h1>
+        <h1 className="font-display text-2xl font-semibold">Collection</h1>
         <div className="flex gap-2">
           <Link href="/app/collection/add" className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-bg hover:bg-accent-strong">
             <Plus size={16} /> Add card

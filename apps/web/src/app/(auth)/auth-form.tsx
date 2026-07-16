@@ -61,7 +61,7 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
         <Radar size={22} />
         <span className="font-semibold text-content">Pokémon Stock Radar</span>
       </Link>
-      <h1 className="text-2xl font-semibold">{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
+      <h1 className="font-display text-2xl font-semibold">{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
       <p className="mt-1 text-sm text-muted">
         {isSignUp ? 'Start tracking your collection.' : 'Sign in to your collection.'}
       </p>

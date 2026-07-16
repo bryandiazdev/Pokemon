@@ -100,7 +100,7 @@ export default async function CardPage({ params }: Params) {
 
         <div className="space-y-4">
           <div>
-            <h1 className="text-2xl font-semibold">{card.name}</h1>
+            <h1 className="font-display text-2xl font-semibold">{card.name}</h1>
             <p className="text-muted">
               {set?.name} · #{card.number}
               {card.rarity ? ` · ${card.rarity}` : ''}

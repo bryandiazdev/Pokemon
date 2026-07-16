@@ -2,14 +2,8 @@ import type { ReactNode } from 'react';
 import { cn } from '@psr/ui';
 
 /** A vertically-spaced page section with an optional eyebrow, heading, and lead text. */
-export function Section({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <section className={cn('py-14 sm:py-16', className)}>{children}</section>;
+export function Section({ children, className }: { children: ReactNode; className?: string }) {
+  return <section className={cn('py-16 sm:py-20', className)}>{children}</section>;
 }
 
 export function SectionHeader({
@@ -28,13 +22,11 @@ export function SectionHeader({
   const Heading = as;
   return (
     <div className={cn('max-w-2xl', className)}>
-      {eyebrow && (
-        <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-accent">{eyebrow}</p>
-      )}
+      {eyebrow && <p className="label-strip mb-3 text-accent">{eyebrow}</p>}
       <Heading
         className={cn(
-          'font-semibold tracking-tight text-content',
-          as === 'h1' ? 'text-4xl sm:text-5xl' : 'text-2xl sm:text-3xl',
+          'font-display font-semibold tracking-tight text-content',
+          as === 'h1' ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-[2.5rem]',
         )}
       >
         {title}
@@ -50,7 +42,7 @@ export function Prose({ children, className }: { children: ReactNode; className?
     <div
       className={cn(
         'max-w-3xl space-y-6 text-base leading-relaxed text-muted',
-        '[&_h2]:mt-10 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-content',
+        '[&_h2]:mt-10 [&_h2]:font-display [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-content',
         '[&_h3]:mt-6 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-content',
         '[&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-accent-strong',
         '[&_strong]:font-semibold [&_strong]:text-content',

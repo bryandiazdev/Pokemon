@@ -10,10 +10,11 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-surface/95 backdrop-blur md:hidden"
+      className="safe-bottom fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-surface/90 backdrop-blur-xl md:hidden"
     >
       {items.map((item) => {
-        const active = pathname === item.href || (item.href !== '/app' && pathname.startsWith(item.href));
+        const active =
+          pathname === item.href || (item.href !== '/app' && pathname.startsWith(item.href));
         const Icon = item.icon;
         return (
           <Link
@@ -21,10 +22,16 @@ export function BottomNav() {
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium',
-              active ? 'text-accent' : 'text-muted',
+              'relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium tracking-wide transition-colors',
+              active ? 'text-accent' : 'text-faint',
             )}
           >
+            {active && (
+              <span
+                aria-hidden
+                className="absolute top-0 h-[3px] w-8 rounded-full bg-prism"
+              />
+            )}
             <Icon size={20} aria-hidden />
             {item.label}
           </Link>

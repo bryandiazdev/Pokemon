@@ -46,7 +46,7 @@ export default async function MarketPage() {
     <div className="mx-auto max-w-5xl space-y-6 py-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Market</h1>
+          <h1 className="font-display text-2xl font-semibold">Market</h1>
           <p className="text-muted">{market.note}</p>
         </div>
         <FreshnessBadge freshness={market.freshness} />

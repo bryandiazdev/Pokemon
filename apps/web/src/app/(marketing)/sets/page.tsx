@@ -15,7 +15,7 @@ export default async function SetsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 py-6">
       <header>
-        <h1 className="text-2xl font-semibold">Sets</h1>
+        <h1 className="font-display text-2xl font-semibold">Sets</h1>
         <p className="text-muted">Browse sets, then track your completion inside your collection.</p>
       </header>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

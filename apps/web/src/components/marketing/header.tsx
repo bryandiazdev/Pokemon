@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Radar, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { cn } from '@psr/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Wordmark } from '@/components/brand';
 
 const NAV_LINKS = [
   { href: '/features', label: 'Features' },
@@ -18,22 +19,12 @@ export function MarketingHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-bg/85 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
+    <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link
-          href="/"
-          className="flex items-center gap-2 rounded-lg text-content"
-          aria-label="Pokémon Stock Radar home"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
-            <Radar size={20} aria-hidden />
-          </span>
-          <span className="text-sm font-semibold tracking-tight sm:text-base">
-            Pokémon Stock Radar
-          </span>
+        <Link href="/" aria-label="Pokémon Stock Radar home">
+          <Wordmark markSize={26} />
         </Link>
 
-        {/* Desktop nav */}
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
             <Link
@@ -56,12 +47,11 @@ export function MarketingHeader() {
           </Link>
           <Link
             href="/sign-up"
-            className="hidden min-h-11 items-center rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg transition-colors hover:bg-accent-strong sm:inline-flex"
+            className="hidden min-h-10 items-center rounded-lg bg-prism px-4 text-sm font-semibold text-accent-ink transition-all hover:brightness-110 sm:inline-flex"
           >
             Create account
           </Link>
 
-          {/* Mobile menu toggle */}
           <button
             type="button"
             aria-label={open ? 'Close menu' : 'Open menu'}
@@ -75,10 +65,12 @@ export function MarketingHeader() {
         </div>
       </div>
 
-      {/* Mobile menu */}
       {open && (
         <div id="mobile-menu" className="border-t border-border bg-bg md:hidden">
-          <nav aria-label="Mobile" className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-3">
+          <nav
+            aria-label="Mobile"
+            className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-3"
+          >
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -103,7 +95,7 @@ export function MarketingHeader() {
             <Link
               href="/sign-up"
               onClick={() => setOpen(false)}
-              className="flex min-h-11 items-center justify-center rounded-lg bg-accent px-3 text-sm font-semibold text-bg hover:bg-accent-strong"
+              className="flex min-h-11 items-center justify-center rounded-lg bg-prism px-3 text-sm font-semibold text-accent-ink"
             >
               Create account
             </Link>
