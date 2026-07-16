@@ -31,7 +31,11 @@ const providerSelector = z
   ])
   .default('demo');
 
-const optionalUrl = z.string().url().optional().or(z.literal('').transform(() => undefined));
+const optionalUrl = z
+  .string()
+  .url()
+  .optional()
+  .or(z.literal('').transform(() => undefined));
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -68,15 +72,28 @@ export const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   TRIGGER_SECRET_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM_EMAIL: z.string().email().optional().or(z.literal('').transform(() => undefined)),
+  RESEND_FROM_EMAIL: z
+    .string()
+    .email()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
   SENTRY_DSN: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_HOST: optionalUrl,
 
-  // Vision service.
+  // Vision service (optional local OpenCV microservice).
   VISION_SERVICE_URL: optionalUrl,
   VISION_SERVICE_API_KEY: z.string().optional(),
+
+  /**
+   * OpenAI — optional. When set, Grade Potential sends uploaded card photos to
+   * a vision-capable chat model for condition analysis (alongside or instead of
+   * the local vision service). Get a key at https://platform.openai.com/api-keys
+   */
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  /** Defaults to gpt-4o (vision). Override e.g. gpt-4o-mini for cost. */
+  OPENAI_GRADE_MODEL: z.string().default('gpt-4o'),
 
   // Provider selectors.
   CATALOG_PROVIDER: providerSelector,
@@ -175,7 +192,10 @@ function isHostedRuntime(source: Record<string, string | undefined>): boolean {
 function sanitizeValue(key: string, raw: string): string {
   let v = raw.trim();
   // Strip one layer of matching surrounding quotes ("..." or '...').
-  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+  if (
+    v.length >= 2 &&
+    ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
+  ) {
     v = v.slice(1, -1).trim();
   }
   if (ENUM_FIELDS.has(key)) v = v.toLowerCase();
@@ -185,7 +205,9 @@ function sanitizeValue(key: string, raw: string): string {
   return v;
 }
 
-function sanitizeSource(source: Record<string, string | undefined>): Record<string, string | undefined> {
+function sanitizeSource(
+  source: Record<string, string | undefined>,
+): Record<string, string | undefined> {
   const keys = Object.keys(envSchema.shape) as Array<keyof typeof envSchema.shape>;
   const out: Record<string, string | undefined> = {};
   for (const key of keys) {
@@ -193,7 +215,9 @@ function sanitizeSource(source: Record<string, string | undefined>): Record<stri
     if (raw === undefined) continue;
     const cleaned = sanitizeValue(key as string, raw);
     if (cleaned !== raw) {
-      diagnostics.warnings.push(`${String(key)}: value sanitized (whitespace/quotes/protocol/case)`);
+      diagnostics.warnings.push(
+        `${String(key)}: value sanitized (whitespace/quotes/protocol/case)`,
+      );
     }
     // Empty string means "unset" — dashboards often save empties.
     out[key as string] = cleaned === '' ? undefined : cleaned;
@@ -243,7 +267,9 @@ function reconcile(env: Env, source: Record<string, string | undefined>): Env {
       'DATA_MODE=live downgraded to demo: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY missing or invalid',
     );
     // eslint-disable-next-line no-console
-    console.warn('[config] DATA_MODE=live but Supabase env is missing/invalid — falling back to demo mode.');
+    console.warn(
+      '[config] DATA_MODE=live but Supabase env is missing/invalid — falling back to demo mode.',
+    );
     next = { ...next, DATA_MODE: 'demo' };
   }
   return next;

@@ -7,24 +7,51 @@ import { Badge } from '@/components/ui/badge';
 import { GradeDisclaimer } from '@/components/disclaimer';
 import { RadarMark } from '@/components/brand';
 import { compressImageFile } from '@/lib/image-compress';
-import {
-  CheckCircle2,
-  Circle,
-  Camera,
-  Upload,
-  RotateCcw,
-  X,
-  ImageIcon,
-} from 'lucide-react';
+import { CheckCircle2, Circle, Camera, Upload, RotateCcw, X, ImageIcon } from 'lucide-react';
 
 const CAPTURES = [
-  { key: 'front', label: 'Front — straight on', hint: 'Card flat, camera parallel, full card in frame', required: true },
-  { key: 'back', label: 'Back — straight on', hint: 'Same framing as the front', required: true },
-  { key: 'front_angled', label: 'Front — angled light', hint: 'Tilt light to reveal surface scratches', required: true },
-  { key: 'corner_tl', label: 'Top-left corner', hint: 'Optional close-up', required: false },
-  { key: 'corner_tr', label: 'Top-right corner', hint: 'Optional close-up', required: false },
-  { key: 'corner_bl', label: 'Bottom-left corner', hint: 'Optional close-up', required: false },
-  { key: 'corner_br', label: 'Bottom-right corner', hint: 'Optional close-up', required: false },
+  {
+    key: 'front',
+    label: 'Front — straight on',
+    hint: 'Card flat, camera parallel, full card in frame',
+    required: true,
+  },
+  {
+    key: 'back',
+    label: 'Back — straight on',
+    hint: 'Same framing as the front',
+    required: true,
+  },
+  {
+    key: 'front_angled',
+    label: 'Front — angled light',
+    hint: 'Tilt light to reveal surface scratches',
+    required: true,
+  },
+  {
+    key: 'corner_tl',
+    label: 'Top-left corner',
+    hint: 'Optional close-up',
+    required: false,
+  },
+  {
+    key: 'corner_tr',
+    label: 'Top-right corner',
+    hint: 'Optional close-up',
+    required: false,
+  },
+  {
+    key: 'corner_bl',
+    label: 'Bottom-left corner',
+    hint: 'Optional close-up',
+    required: false,
+  },
+  {
+    key: 'corner_br',
+    label: 'Bottom-right corner',
+    hint: 'Optional close-up',
+    required: false,
+  },
 ] as const;
 
 type CaptureKey = (typeof CAPTURES)[number]['key'];
@@ -58,6 +85,8 @@ interface Report {
   modelVersion: string;
   remaining: number | null;
   captures?: string[];
+  analysisSummary?: string;
+  cardIdentification?: string | null;
 }
 
 export function GradeClient() {
@@ -138,7 +167,10 @@ export function GradeClient() {
     form.append('cardExternalId', 'base1-4');
 
     try {
-      const res = await fetch('/api/grade/analyze', { method: 'POST', body: form });
+      const res = await fetch('/api/grade/analyze', {
+        method: 'POST',
+        body: form,
+      });
       const body = await res.json();
       if (!body.success) {
         setError(body.error?.message ?? 'Analysis failed. Please try again.');
@@ -290,9 +322,7 @@ export function GradeClient() {
         {loading ? 'Analyzing photos…' : 'Run Grade Potential analysis'}
       </Button>
       {!requiredDone && (
-        <p className="text-xs text-muted">
-          Upload the three required photos to run the analysis.
-        </p>
+        <p className="text-xs text-muted">Upload the three required photos to run the analysis.</p>
       )}
     </div>
   );
@@ -339,7 +369,7 @@ function GradeReport({
   const strong = estimate.submissionRecommendation.includes('Strong');
   const possible = estimate.submissionRecommendation.includes('Possible');
   const recTone = strong ? 'positive' : possible ? 'gold' : 'neutral';
-  const live = report.modelVersion.includes('vision') && !report.modelVersion.includes('demo');
+  const live = !report.modelVersion.includes('demo');
 
   return (
     <div className="space-y-5">
@@ -391,6 +421,20 @@ function GradeReport({
         </div>
       </Card>
 
+      {(report.cardIdentification || report.analysisSummary) && (
+        <Card>
+          <CardTitle>Vision analysis</CardTitle>
+          {report.cardIdentification && (
+            <p className="mt-3 text-sm text-content">
+              Best-match identification: {report.cardIdentification}
+            </p>
+          )}
+          {report.analysisSummary && (
+            <p className="mt-2 text-sm leading-relaxed text-muted">{report.analysisSummary}</p>
+          )}
+        </Card>
+      )}
+
       {(estimate.limitingDefects.length > 0 || estimate.suggestedRecaptures.length > 0) && (
         <div className="grid gap-4 sm:grid-cols-2">
           {estimate.limitingDefects.length > 0 && (
@@ -427,7 +471,7 @@ function GradeReport({
         {(report.captures?.length ?? 0) > 0
           ? `${report.captures!.length} uploaded capture${report.captures!.length === 1 ? '' : 's'}`
           : 'uploads'}
-        {live ? '' : ' · demo scoring (connect VISION_SERVICE_URL for live CV)'}
+        {live ? '' : ' · demo scoring (set OPENAI_API_KEY for live vision)'}
       </div>
       <GradeDisclaimer />
     </div>

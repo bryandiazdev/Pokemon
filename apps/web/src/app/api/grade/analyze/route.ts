@@ -11,6 +11,7 @@ import {
 import type { SubmissionRecommendation } from '@psr/types';
 import { getEntitlementContext, checkGradeScan } from '@/lib/services/entitlements';
 import { env } from '@/lib/env';
+import { analyzeGradeWithOpenAI, hasOpenAiGrade } from '@/lib/services/grade-llm';
 
 /**
  * Grade-potential analysis.
@@ -90,6 +91,8 @@ function jsonReport(opts: {
   captures?: string[];
   estimateOverride?: GradeEstimate;
   disclaimer?: string;
+  analysisSummary?: string;
+  cardIdentification?: string | null;
 }) {
   const estimate = opts.estimateOverride ?? evaluateGrade(opts.scores, opts.findings ?? []);
   return jsonOk({
@@ -100,6 +103,8 @@ function jsonReport(opts: {
     disclaimer: opts.disclaimer ?? GRADE_DISCLAIMER,
     remaining: opts.remaining,
     captures: opts.captures ?? [],
+    analysisSummary: opts.analysisSummary,
+    cardIdentification: opts.cardIdentification,
   });
 }
 
@@ -126,7 +131,10 @@ async function proxyToVision(
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[grade/analyze] vision fetch failed:', err);
-    return { error: 'Vision service unreachable. Try again in a moment.', status: 502 };
+    return {
+      error: 'Vision service unreachable. Try again in a moment.',
+      status: 502,
+    };
   }
 
   if (!res.ok) {
@@ -215,10 +223,42 @@ export const POST = withErrorHandling(async (req: Request) => {
     const present = new Set(captureTypes);
     const missing = REQUIRED_CAPTURES.filter((k) => !present.has(k));
     if (missing.length > 0) {
-      return jsonError(
-        'validation_error',
-        `Missing required captures: ${missing.join(', ')}.`,
-      );
+      return jsonError('validation_error', `Missing required captures: ${missing.join(', ')}.`);
+    }
+
+    // OpenAI is the simplest hosted vision path: the browser uploads to this
+    // route and only the server reads OPENAI_API_KEY. The secret is never sent
+    // to the client or embedded in the Next.js bundle.
+    if (hasOpenAiGrade()) {
+      try {
+        const analysis = await analyzeGradeWithOpenAI(files, captureTypes);
+        const estimate = evaluateGrade(analysis.scores, analysis.findings);
+        return jsonReport({
+          scores: analysis.scores,
+          findings: analysis.findings,
+          estimateOverride: {
+            ...estimate,
+            limitingDefects: [
+              ...new Set([...estimate.limitingDefects, ...analysis.limitingDefects]),
+            ],
+            suggestedRecaptures: [
+              ...new Set([...estimate.suggestedRecaptures, ...analysis.suggestedRecaptures]),
+            ],
+          },
+          modelVersion: `openai:${analysis.model}`,
+          remaining: gate.remaining,
+          captures: captureTypes,
+          analysisSummary: analysis.summary,
+          cardIdentification: analysis.cardIdentification,
+        });
+      } catch (err) {
+        // A configured integration should fail visibly instead of silently
+        // returning sample grades that look like real analysis.
+        // eslint-disable-next-line no-console
+        console.error('[grade/analyze] OpenAI analysis failed:', err);
+        const message = err instanceof Error ? err.message : 'OpenAI vision analysis failed.';
+        return jsonError('internal_error', message);
+      }
     }
 
     if (env.VISION_SERVICE_URL) {
@@ -270,10 +310,7 @@ export const POST = withErrorHandling(async (req: Request) => {
     const present = new Set(captures);
     const missing = REQUIRED_CAPTURES.filter((k) => !present.has(k));
     if (missing.length > 0) {
-      return jsonError(
-        'validation_error',
-        `Missing required captures: ${missing.join(', ')}.`,
-      );
+      return jsonError('validation_error', `Missing required captures: ${missing.join(', ')}.`);
     }
   }
 
@@ -282,7 +319,11 @@ export const POST = withErrorHandling(async (req: Request) => {
   return jsonReport({
     scores,
     findings,
-    modelVersion: env.VISION_SERVICE_URL ? 'vision-live' : 'cv-heuristic-0.1.0-demo',
+    modelVersion: hasOpenAiGrade()
+      ? `openai:${env.OPENAI_GRADE_MODEL}`
+      : env.VISION_SERVICE_URL
+        ? 'vision-live'
+        : 'cv-heuristic-0.1.0-demo',
     remaining: gate.remaining,
     captures,
   });
