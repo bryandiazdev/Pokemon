@@ -14,25 +14,38 @@ export interface ProviderStatus {
   recognitionLive: boolean;
   /** True when any real data source is active. */
   anyLive: boolean;
+  /** Human name of the active catalog source, e.g. "TCGdex". */
+  sourceName: string;
 }
 
 const unset = (v: string | undefined): boolean => v === undefined || v === '';
 
+const SOURCE_NAMES: Record<string, string> = {
+  demo: 'demo data',
+  tcgdex: 'TCGdex',
+  pokemontcg: 'the Pokémon TCG API',
+};
+
+/**
+ * Resolve the effective catalog/pricing provider from (in priority order):
+ *  1. an explicit per-capability selector (CATALOG_PROVIDER / RAW_PRICING_PROVIDER),
+ *  2. PROVIDER_PRESET (demo | tcgdex | pokemontcg),
+ *  3. presence of a Pokémon TCG API key → pokemontcg,
+ *  4. demo.
+ * TCGdex needs no key, so `PROVIDER_PRESET=tcgdex` is free live data with zero secrets.
+ */
 function resolveSelectors(): ProviderConfig {
   const hasPtcgKey = Boolean(env.POKEMON_TCG_API_KEY);
+  const preset = env.PROVIDER_PRESET;
 
-  // Auto-upgrade to the live adapter ONLY when the selector is genuinely unset
-  // (an explicit `=demo` is respected). This is the "just add the key" magic.
-  const catalog = unset(process.env.CATALOG_PROVIDER)
-    ? hasPtcgKey
-      ? 'pokemontcg'
-      : 'demo'
-    : env.CATALOG_PROVIDER;
-  const rawPricing = unset(process.env.RAW_PRICING_PROVIDER)
-    ? hasPtcgKey
-      ? 'pokemontcg'
-      : 'demo'
-    : env.RAW_PRICING_PROVIDER;
+  const presetChoice = (): string => {
+    if (preset === 'tcgdex') return 'tcgdex';
+    if (preset === 'pokemontcg' || hasPtcgKey) return 'pokemontcg';
+    return 'demo';
+  };
+
+  const catalog = unset(process.env.CATALOG_PROVIDER) ? presetChoice() : env.CATALOG_PROVIDER;
+  const rawPricing = unset(process.env.RAW_PRICING_PROVIDER) ? presetChoice() : env.RAW_PRICING_PROVIDER;
 
   return {
     catalog,
@@ -78,5 +91,6 @@ export function getProviderStatus(): ProviderStatus {
     gradedPricingLive,
     recognitionLive,
     anyLive: catalogLive || rawPricingLive || gradedPricingLive || recognitionLive,
+    sourceName: SOURCE_NAMES[rawPricingLive ? s.rawPricing : s.catalog] ?? s.catalog,
   };
 }

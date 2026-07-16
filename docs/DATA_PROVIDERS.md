@@ -29,16 +29,23 @@ supported countries · currencies · raw-condition coverage · graded-price cove
 depth · image recognition · rate limits · credit costs · attribution · caching restrictions ·
 data-retention restrictions · webhook support.**
 
-### Pokémon TCG API (pokemontcg.io)
-- **Use in PSR:** primary **catalog** source in the reference adapter (sets, cards, images,
-  basic TCGplayer/Cardmarket price snapshots where present).
-- Free tier with API key; generous but rate-limited. Good English coverage; limited JP.
-- ✅ Catalog, images. ⚠️ Pricing is embedded/limited; not a substitute for a pricing provider.
-- Adapter implemented: `packages/providers/src/adapters/pokemontcg`.
+### TCGdex ★ recommended free live source (`PROVIDER_PRESET=tcgdex`)
+- **Use in PSR:** primary **catalog + raw pricing** live adapter. Verified 2026-07.
+- **Free and KEYLESS** — no API key, no account. Multilingual (EN/JP/FR/DE/…).
+- Market pricing embedded in each card object: **TCGplayer (USD)** by printing
+  (low/mid/high/market/directLow) and **Cardmarket (EUR)** (avg/low/trend + avg1/avg7/avg30).
+  Updated ~hourly. Set fetch includes its full card list; images via `assets.tcgdex.net`.
+- ✅ Catalog, images, raw prices (USD + EUR), sparse Cardmarket trend for history.
+  ❌ No graded/PSA prices, no population. Confirm current terms/rate-limits before heavy
+  production use; be a good citizen (cache, our snapshot job batches requests).
+- Adapters implemented: `packages/providers/src/adapters/tcgdex.ts`.
 
-### TCGdex
-- Open catalog data incl. multilingual (JP/FR/DE…). Good fallback/enrichment for catalog.
-- ✅ Multilingual catalog. ❌ No first-party market pricing.
+### Pokémon TCG API (pokemontcg.io) — now paid via Scrydex
+- **⚠️ 2026 status:** pokemontcg.io has moved to **Scrydex**, a commercial API (paid, ~$29/mo).
+  The legacy free key still works for now but is being wound down — prefer TCGdex.
+- Catalog + embedded TCGplayer/Cardmarket price snapshots. Adapters:
+  `packages/providers/src/adapters/pokemontcg.ts` + `pokemontcg-pricing.ts`
+  (`CATALOG_PROVIDER=pokemontcg`, optional `POKEMON_TCG_API_KEY`).
 
 ### Scrydex
 - Positioned as Pokémon/TCG pricing + catalog API. Verify commercial tier, graded coverage,
@@ -79,11 +86,13 @@ non-prod) serves the request, and the response is badged as degraded/stale.
 
 ## Current status in this repo
 - **Implemented (live, behind the interfaces):**
-  - **Catalog** — Pokémon TCG API adapter (`CATALOG_PROVIDER=pokemontcg`).
-  - **Raw pricing** — Pokémon TCG API adapter (`RAW_PRICING_PROVIDER=pokemontcg`) that
-    normalizes the card object's embedded TCGplayer (USD) + Cardmarket (EUR) prices to
-    `NormalizedPrice[]`. No history from this source by design — daily `price_points` snapshots
-    build history (see the price-snapshot job). Tested with mocked fetch fixtures.
+  - **Catalog + raw pricing — TCGdex (free, keyless): the recommended default live source.**
+    `PROVIDER_PRESET=tcgdex` (or `CATALOG_PROVIDER=tcgdex` / `RAW_PRICING_PROVIDER=tcgdex`).
+    Normalizes TCGplayer (USD) + Cardmarket (EUR) prices to `NormalizedPrice[]`; a genuine sparse
+    Cardmarket trend powers history until our daily `price_points` snapshots accrue dense data.
+    Tested with mocked fetch fixtures + verified against the live API.
+  - **Catalog + raw pricing — Pokémon TCG API** (`=pokemontcg`, now paid via Scrydex; optional
+    `POKEMON_TCG_API_KEY`). Same normalization. Kept as a legacy option.
   - **Recognition** — Catalog-OCR adapter (`RECOGNITION_PROVIDER=catalog-ocr`): ranks catalog
     candidates from OCR text (name/number/set) with a deterministic bigram similarity + number/
     language bonuses; never auto-selects ambiguous look-alikes. A hosted image-recognition

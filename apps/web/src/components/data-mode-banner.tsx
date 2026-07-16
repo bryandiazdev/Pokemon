@@ -14,7 +14,7 @@ export function DataModeBanner() {
       <div className="flex items-center gap-2 rounded-lg border border-positive/30 bg-positive/10 px-4 py-2 text-sm text-positive">
         <Sparkles size={15} aria-hidden />
         <span>
-          Live data via the Pokémon TCG API. Raw prices are real market snapshots; graded/population
+          Live data via {status.sourceName}. Raw prices are real market snapshots; graded/population
           figures are still sample data (labeled below).
         </span>
       </div>
@@ -25,8 +25,9 @@ export function DataModeBanner() {
     <div className="flex items-center gap-2 rounded-lg border border-demo/30 bg-demo/10 px-4 py-2 text-sm text-demo">
       <Info size={15} aria-hidden />
       <span>
-        Demo mode — prices and grades shown are illustrative sample data. Add a Pokémon TCG API key
-        to switch to live cards and prices.
+        Demo mode — prices and grades shown are illustrative sample data. Set{' '}
+        <code className="rounded bg-demo/20 px-1">PROVIDER_PRESET=tcgdex</code> for free live cards
+        and prices (no API key needed).
       </span>
     </div>
   );

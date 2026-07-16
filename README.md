@@ -40,20 +40,26 @@ cp .env.example .env.local
 pnpm dev              # http://localhost:3000
 ```
 
-### Real cards + real prices — just add one key
+### Real cards + real prices — free, no API key
 
-Get a free key (30 seconds, no card) at https://dev.pokemontcg.io/ and set **only** this in
-`.env.local`:
+Set **one** line in `.env.local`:
 
 ```bash
-POKEMON_TCG_API_KEY=your_free_key_here
+PROVIDER_PRESET=tcgdex
 ```
 
-The catalog and raw pricing switch to **live automatically** — real search, cards, images, raw
-prices, price history, and portfolio values, with a green "Live data" indicator and honest
-per-datum freshness badges. No Supabase needed (keep `DATA_MODE=demo`). Graded/PSA prices and
-population remain clearly-labeled sample data (a free key can't provide real graded sold prices —
-that needs a licensed source). Recognition stays on the demo adapter.
+Catalog and raw pricing switch to **live** via [TCGdex](https://tcgdex.dev) — a free, **keyless**
+API with the real Pokémon catalog, card images, and TCGplayer (USD) + Cardmarket (EUR) prices.
+Real search, cards, images, raw prices, price history, and portfolio values, with a green "Live
+data via TCGdex" indicator and honest per-datum freshness badges. No key, no Supabase, no cost.
+
+> Graded/PSA prices and population remain clearly-labeled sample data — a free source can't provide
+> real graded *sold* prices (those live in licensed data like PriceCharting). Recognition stays on
+> the demo adapter.
+>
+> `pokemontcg.io` is now part of **Scrydex** and its commercial API is paid (~$29/mo). The legacy
+> adapter still works if you set `POKEMON_TCG_API_KEY`, but `PROVIDER_PRESET=tcgdex` is the
+> recommended free path.
 
 Optional — the Python vision service (for live grade scans):
 

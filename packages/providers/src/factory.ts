@@ -9,6 +9,7 @@ import type { Capability, ProviderCapabilities } from './interfaces';
 import { demoProviderCapabilities } from './adapters/demo';
 import { createPokemonTcgCatalog } from './adapters/pokemontcg';
 import { createPokemonTcgRawPricing } from './adapters/pokemontcg-pricing';
+import { createTcgdexCatalog, createTcgdexRawPricing } from './adapters/tcgdex';
 import { createCatalogOcrRecognition } from './adapters/catalog-ocr-recognition';
 
 export interface ProviderConfig {
@@ -36,8 +37,10 @@ export function buildRegistry(
       `[providers] ${cap} provider "${sel}" is not implemented as a live adapter; using demo fixtures. See docs/DATA_PROVIDERS.md.`,
     );
 
-  // Catalog
-  if (config.catalog === 'pokemontcg') {
+  // Catalog — TCGdex (free, keyless) and Pokémon TCG API are both live options.
+  if (config.catalog === 'tcgdex') {
+    primary.catalog = createTcgdexCatalog();
+  } else if (config.catalog === 'pokemontcg') {
     primary.catalog = createPokemonTcgCatalog({ apiKey: config.pokemonTcgApiKey });
   } else {
     if (config.catalog !== 'demo') warn('catalog', config.catalog);
@@ -52,8 +55,10 @@ export function buildRegistry(
     primary.recognition = demo.recognition;
   }
 
-  // Raw pricing: live Pokémon TCG adapter, else demo.
-  if (config.rawPricing === 'pokemontcg') {
+  // Raw pricing: TCGdex (free, keyless) or Pokémon TCG adapter, else demo.
+  if (config.rawPricing === 'tcgdex') {
+    primary.rawPricing = createTcgdexRawPricing();
+  } else if (config.rawPricing === 'pokemontcg') {
     primary.rawPricing = createPokemonTcgRawPricing({ apiKey: config.pokemonTcgApiKey });
   } else {
     if (config.rawPricing !== 'demo') warn('rawPricing', config.rawPricing);

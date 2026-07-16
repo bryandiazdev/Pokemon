@@ -31,6 +31,15 @@ export const envSchema = z.object({
   /** Master switch for fixtures vs. live data. */
   DATA_MODE: z.enum(['demo', 'live']).default('demo'),
 
+  /**
+   * One-knob provider preset for catalog + raw pricing:
+   *  - demo       → fixtures (offline, deterministic; default)
+   *  - tcgdex     → FREE live data, no API key required (recommended)
+   *  - pokemontcg → Pokémon TCG API (optional key)
+   * Individual CATALOG_PROVIDER / RAW_PRICING_PROVIDER still override this.
+   */
+  PROVIDER_PRESET: z.enum(['demo', 'tcgdex', 'pokemontcg']).default('demo'),
+
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 
   // Supabase — optional in demo (app can run fully offline with fixtures).

@@ -9,6 +9,7 @@ export {
   createPokemonTcgRawPricing,
   mapTcgPlayerFinish,
 } from './adapters/pokemontcg-pricing';
+export { createTcgdexCatalog, createTcgdexRawPricing } from './adapters/tcgdex';
 export {
   createCatalogOcrRecognition,
   stringSimilarity,
