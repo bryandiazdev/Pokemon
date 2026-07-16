@@ -15,19 +15,27 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request });
   if (!supabaseUrl || !anonKey) return response;
 
-  const supabase = createServerClient(supabaseUrl, anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+  // Session refresh is best-effort. If Supabase is unreachable or misconfigured
+  // (e.g. a localhost URL that Vercel's servers can't reach), this must NEVER
+  // throw — a middleware throw 500s every route, including the homepage.
+  try {
+    const supabase = createServerClient(supabaseUrl, anonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(items: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          for (const { name, value, options } of items) {
+            response.cookies.set(name, value, options as never);
+          }
+        },
       },
-      setAll(items: { name: string; value: string; options?: Record<string, unknown> }[]) {
-        for (const { name, value, options } of items) {
-          response.cookies.set(name, value, options as never);
-        }
-      },
-    },
-  });
-  await supabase.auth.getUser();
+    });
+    await supabase.auth.getUser();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[middleware] session refresh skipped:', err);
+  }
   return response;
 }
 
