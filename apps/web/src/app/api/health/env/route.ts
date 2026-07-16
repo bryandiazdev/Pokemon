@@ -38,9 +38,15 @@ export async function GET() {
     },
     envDiagnostics: {
       liveDowngraded: diag.liveDowngraded,
+      supabaseLoopbackRejected: diag.supabaseLoopbackRejected,
       droppedKeys: diag.droppedKeys,
       warnings: diag.warnings,
     },
+    hint: diag.supabaseLoopbackRejected
+      ? 'NEXT_PUBLIC_SUPABASE_URL was a localhost address on this hosted deploy and was ignored. Set it to your https://YOUR_PROJECT.supabase.co URL in Vercel, then redeploy.'
+      : !hasSupabase
+        ? 'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (and SUPABASE_SERVICE_ROLE_KEY) in Vercel for live auth/persistence.'
+        : null,
     build: {
       commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       region: process.env.VERCEL_REGION ?? null,

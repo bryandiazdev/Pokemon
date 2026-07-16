@@ -166,7 +166,14 @@ function demoInputs(): ValuationInput[] {
 export async function getPortfolioSummary(): Promise<PortfolioSummary> {
   const user = await getCurrentUser();
   const live = Boolean(user && !user.isDemo);
-  const inputs = live ? await liveInputs(user!.id) : demoInputs();
+  let inputs: ValuationInput[];
+  try {
+    inputs = live ? await liveInputs(user!.id) : demoInputs();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[portfolio] falling back to demo inputs:', err);
+    inputs = demoInputs();
+  }
   const valued = await valueItems(inputs);
   const freshness: PortfolioSummary['freshness'] = live ? 'live' : 'demo';
 

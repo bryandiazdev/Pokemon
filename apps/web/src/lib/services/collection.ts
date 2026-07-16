@@ -115,44 +115,56 @@ export async function addCollectionItem(
 }
 
 export async function listCollectionItems(userId: string): Promise<CollectionItemRow[]> {
-  const sb = await getServerSupabase();
-  if (!sb) return [];
-  const { data } = await sb
-    .from('collection_items')
-    .select(
-      'id, card_id, quantity, ownership_type, raw_condition, grading_company, grade, purchase_price_minor, purchase_currency, card:cards(name, number, image_small_url, image_large_url, set:sets(name))',
-    )
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  try {
+    const sb = await getServerSupabase();
+    if (!sb) return [];
+    const { data, error } = await sb
+      .from('collection_items')
+      .select(
+        'id, card_id, quantity, ownership_type, raw_condition, grading_company, grade, purchase_price_minor, purchase_currency, card:cards(name, number, image_small_url, image_large_url, set:sets(name))',
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-  const rows = data ?? [];
-  const externalMap = await externalIdsForCards(rows.map((r) => r.card_id as string));
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[collection] listCollectionItems failed:', error.message);
+      return [];
+    }
 
-  return rows.map((r) => {
-    const card = (r.card ?? {}) as {
-      name?: string;
-      number?: string;
-      image_small_url?: string;
-      image_large_url?: string;
-      set?: { name?: string };
-    };
-    return {
-      id: r.id as string,
-      cardId: r.card_id as string,
-      cardExternalId: externalMap.get(r.card_id as string) ?? null,
-      name: card.name ?? 'Unknown card',
-      number: card.number ?? null,
-      setName: card.set?.name ?? null,
-      imageUrl: card.image_small_url ?? card.image_large_url ?? null,
-      quantity: r.quantity as number,
-      ownershipType: r.ownership_type as OwnershipType,
-      rawCondition: (r.raw_condition as RawCondition | null) ?? null,
-      gradingCompany: (r.grading_company as GradingCompany | null) ?? null,
-      grade: (r.grade as string | null) ?? null,
-      purchasePriceMinor: (r.purchase_price_minor as number) ?? 0,
-      purchaseCurrency: (r.purchase_currency as string) ?? 'USD',
-    };
-  });
+    const rows = data ?? [];
+    const externalMap = await externalIdsForCards(rows.map((r) => r.card_id as string));
+
+    return rows.map((r) => {
+      const card = (r.card ?? {}) as {
+        name?: string;
+        number?: string;
+        image_small_url?: string;
+        image_large_url?: string;
+        set?: { name?: string };
+      };
+      return {
+        id: r.id as string,
+        cardId: r.card_id as string,
+        cardExternalId: externalMap.get(r.card_id as string) ?? null,
+        name: card.name ?? 'Unknown card',
+        number: card.number ?? null,
+        setName: card.set?.name ?? null,
+        imageUrl: card.image_small_url ?? card.image_large_url ?? null,
+        quantity: r.quantity as number,
+        ownershipType: r.ownership_type as OwnershipType,
+        rawCondition: (r.raw_condition as RawCondition | null) ?? null,
+        gradingCompany: (r.grading_company as GradingCompany | null) ?? null,
+        grade: (r.grade as string | null) ?? null,
+        purchasePriceMinor: (r.purchase_price_minor as number) ?? 0,
+        purchaseCurrency: (r.purchase_currency as string) ?? 'USD',
+      };
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[collection] listCollectionItems threw:', err);
+    return [];
+  }
 }
 
 export async function deleteCollectionItem(userId: string, itemId: string): Promise<void> {

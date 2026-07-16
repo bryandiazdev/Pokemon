@@ -87,4 +87,30 @@ describe('env validation', () => {
     expect(env.DATA_MODE).toBe('demo');
     expect(env.CATALOG_PROVIDER).toBe('demo');
   });
+
+  it('rejects localhost Supabase URLs on Vercel (hosted) so auth cannot hang', () => {
+    const env = loadEnv({
+      VERCEL: '1',
+      DATA_MODE: 'live',
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon',
+      SUPABASE_SERVICE_ROLE_KEY: 'service',
+    });
+    expect(env.NEXT_PUBLIC_SUPABASE_URL).toBeUndefined();
+    expect(env.DATA_MODE).toBe('demo');
+    const diag = getEnvDiagnostics();
+    expect(diag.supabaseLoopbackRejected).toBe(true);
+    expect(diag.liveDowngraded).toBe(true);
+  });
+
+  it('still allows localhost Supabase when not on a hosted runtime', () => {
+    const env = loadEnv({
+      DATA_MODE: 'live',
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon',
+    });
+    expect(env.DATA_MODE).toBe('live');
+    expect(env.NEXT_PUBLIC_SUPABASE_URL).toBe('http://127.0.0.1:54321');
+    expect(getEnvDiagnostics().supabaseLoopbackRejected).toBe(false);
+  });
 });

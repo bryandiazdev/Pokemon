@@ -107,9 +107,20 @@ export interface EnvDiagnostics {
   warnings: string[];
   /** True when DATA_MODE=live was downgraded to demo (Supabase missing/invalid). */
   liveDowngraded: boolean;
+  /**
+   * True when NEXT_PUBLIC_SUPABASE_URL pointed at localhost/loopback on a
+   * hosted deploy (Vercel). That config can never work from the cloud and
+   * previously hung auth calls until the serverless function timed out.
+   */
+  supabaseLoopbackRejected: boolean;
 }
 
-const diagnostics: EnvDiagnostics = { droppedKeys: [], warnings: [], liveDowngraded: false };
+const diagnostics: EnvDiagnostics = {
+  droppedKeys: [],
+  warnings: [],
+  liveDowngraded: false,
+  supabaseLoopbackRejected: false,
+};
 
 /** Fields that must be URLs — bare hosts get https:// prepended. */
 const URL_FIELDS = new Set([
@@ -134,6 +145,29 @@ const ENUM_FIELDS = new Set([
   'ACTIVE_LISTINGS_PROVIDER',
 ]);
 
+/** True for hosts that are unreachable from a hosted serverless runtime. */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h === '127.0.0.1' ||
+    h === '0.0.0.0' ||
+    h === '::1' ||
+    h === '[::1]' ||
+    h.endsWith('.local')
+  );
+}
+
+/** Detect whether we're running on a hosted platform (not a laptop). */
+function isHostedRuntime(source: Record<string, string | undefined>): boolean {
+  return (
+    source.VERCEL === '1' ||
+    source.VERCEL === 'true' ||
+    Boolean(source.VERCEL_ENV) ||
+    source.AWS_LAMBDA_FUNCTION_NAME !== undefined ||
+    source.CF_PAGES === '1'
+  );
+}
 /**
  * Clean a single raw env value the way dashboards commonly mangle them:
  * surrounding whitespace, pasted quotes, missing URL protocol, cased enums.
@@ -168,10 +202,41 @@ function sanitizeSource(source: Record<string, string | undefined>): Record<stri
 }
 
 /** Cross-field reconciliation. Never throws. */
-function reconcile(env: Env): Env {
+function reconcile(env: Env, source: Record<string, string | undefined>): Env {
+  let next = env;
+
+  // Hosted deploys cannot reach a laptop's Supabase. A localhost URL here is
+  // almost always a copy-paste from `supabase start` into the Vercel dashboard;
+  // auth.getUser() then hangs/fails and 500s dynamic routes.
+  if (next.NEXT_PUBLIC_SUPABASE_URL && isHostedRuntime(source)) {
+    try {
+      const host = new URL(next.NEXT_PUBLIC_SUPABASE_URL).hostname;
+      if (isLoopbackHost(host)) {
+        diagnostics.supabaseLoopbackRejected = true;
+        diagnostics.liveDowngraded = true;
+        diagnostics.warnings.push(
+          `NEXT_PUBLIC_SUPABASE_URL points at ${host} which is unreachable from this host — cleared (use your https://*.supabase.co project URL)`,
+        );
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[config] Rejecting loopback Supabase URL (${host}) on hosted runtime. Set NEXT_PUBLIC_SUPABASE_URL to your cloud project.`,
+        );
+        next = {
+          ...next,
+          NEXT_PUBLIC_SUPABASE_URL: undefined,
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: undefined,
+          SUPABASE_SERVICE_ROLE_KEY: undefined,
+          DATA_MODE: 'demo',
+        };
+      }
+    } catch {
+      // Invalid URL already handled by schema; ignore.
+    }
+  }
+
   if (
-    env.DATA_MODE === 'live' &&
-    (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    next.DATA_MODE === 'live' &&
+    (!next.NEXT_PUBLIC_SUPABASE_URL || !next.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   ) {
     diagnostics.liveDowngraded = true;
     diagnostics.warnings.push(
@@ -179,9 +244,9 @@ function reconcile(env: Env): Env {
     );
     // eslint-disable-next-line no-console
     console.warn('[config] DATA_MODE=live but Supabase env is missing/invalid — falling back to demo mode.');
-    return { ...env, DATA_MODE: 'demo' };
+    next = { ...next, DATA_MODE: 'demo' };
   }
-  return env;
+  return next;
 }
 
 let cached: Env | null = null;
@@ -196,6 +261,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   diagnostics.droppedKeys = [];
   diagnostics.warnings = [];
   diagnostics.liveDowngraded = false;
+  diagnostics.supabaseLoopbackRejected = false;
 
   const sanitized = sanitizeSource(source);
   let parsed = envSchema.safeParse(sanitized);
@@ -215,13 +281,17 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
 
   // Last resort: pure defaults. envSchema.parse({}) cannot fail (all fields
   // optional or defaulted), so the app always boots.
-  cached = reconcile(parsed.success ? parsed.data : envSchema.parse({}));
+  cached = reconcile(parsed.success ? parsed.data : envSchema.parse({}), source);
   return cached;
 }
 
 /** Names-only diagnostics for the health endpoint. Never contains values. */
 export function getEnvDiagnostics(): EnvDiagnostics {
-  return { ...diagnostics, droppedKeys: [...diagnostics.droppedKeys], warnings: [...diagnostics.warnings] };
+  return {
+    ...diagnostics,
+    droppedKeys: [...diagnostics.droppedKeys],
+    warnings: [...diagnostics.warnings],
+  };
 }
 
 /** Test-only: reset the memoized env. */

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 
 /**
@@ -13,6 +14,12 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Surface the real message in Vercel/runtime logs (digest alone is opaque).
+    // eslint-disable-next-line no-console
+    console.error('[error-boundary]', error.digest ?? 'no-digest', error.message, error);
+  }, [error]);
+
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface text-negative">

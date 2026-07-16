@@ -30,30 +30,35 @@ export async function getMarketOverview(): Promise<MarketOverview> {
   const registry = getRegistry();
   const rows: Mover[] = [];
   for (const card of DEMO_CARDS) {
-    const raw = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
-      a.getCurrentRawPrices({ cardExternalId: card.externalId }),
-    );
-    const nm = raw.find((r) => r.condition === 'near_mint');
-    if (!nm) continue;
-    const history = await registry.call('rawPricing', 'getRawPriceHistory', (a) =>
-      a.getRawPriceHistory({
+    try {
+      const raw = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
+        a.getCurrentRawPrices({ cardExternalId: card.externalId }),
+      );
+      const nm = raw.find((r) => r.condition === 'near_mint');
+      if (!nm) continue;
+      const history = await registry.call('rawPricing', 'getRawPriceHistory', (a) =>
+        a.getRawPriceHistory({
+          cardExternalId: card.externalId,
+          from: new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10),
+          to: new Date().toISOString().slice(0, 10),
+        }),
+      );
+      const first = history[0]?.valueMinor ?? nm.valueMinor;
+      const last = history[history.length - 1]?.valueMinor ?? nm.valueMinor;
+      const changePct = first ? ((last - first) / first) * 100 : 0;
+      const observations = nm.sampleSize ?? 0;
+      rows.push({
         cardExternalId: card.externalId,
-        from: new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10),
-        to: new Date().toISOString().slice(0, 10),
-      }),
-    );
-    const first = history[0]?.valueMinor ?? nm.valueMinor;
-    const last = history[history.length - 1]?.valueMinor ?? nm.valueMinor;
-    const changePct = first ? ((last - first) / first) * 100 : 0;
-    const observations = nm.sampleSize ?? 0;
-    rows.push({
-      cardExternalId: card.externalId,
-      name: card.name,
-      valueMinor: nm.valueMinor,
-      changePct,
-      observations,
-      qualifies: observations >= MIN_OBSERVATIONS,
-    });
+        name: card.name,
+        valueMinor: nm.valueMinor,
+        changePct,
+        observations,
+        qualifies: observations >= MIN_OBSERVATIONS,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[market] pricing failed for', card.externalId, err);
+    }
   }
 
   const qualified = rows.filter((r) => r.qualifies);

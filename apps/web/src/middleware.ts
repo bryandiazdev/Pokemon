@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+/** Hosts that a Vercel/serverless runtime can never reach. */
+function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h === '127.0.0.1' ||
+    h === '0.0.0.0' ||
+    h === '::1' ||
+    h === '[::1]' ||
+    h.endsWith('.local')
+  );
+}
+
+function supabaseUrlUsable(raw: string | undefined): raw is string {
+  if (!raw) return false;
+  try {
+    const url = new URL(raw);
+    // On Vercel, a laptop Supabase URL will hang/fail every request.
+    if (process.env.VERCEL && isLoopbackHost(url.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Refreshes the Supabase session on each request (live mode) so Server Components
  * see a valid session. In demo mode (no Supabase env) it's a pass-through.
@@ -13,7 +38,7 @@ export async function middleware(request: NextRequest) {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const response = NextResponse.next({ request });
-  if (!supabaseUrl || !anonKey) return response;
+  if (!supabaseUrlUsable(supabaseUrl) || !anonKey) return response;
 
   // Session refresh is best-effort. If Supabase is unreachable or misconfigured
   // (e.g. a localhost URL that Vercel's servers can't reach), this must NEVER

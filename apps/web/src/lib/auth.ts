@@ -10,6 +10,25 @@ export interface CurrentUser {
   isDemo: boolean;
 }
 
+/** Cap how long we wait on Supabase auth so a hung project can't 500 the page. */
+const AUTH_TIMEOUT_MS = 2_500;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(t);
+        reject(err);
+      },
+    );
+  });
+}
+
 /**
  * Resolve the current user. In demo mode (no Supabase configured) we return the
  * seeded demo user so the whole app is explorable without sign-in. In live mode
@@ -29,7 +48,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     if (!supabase) return null;
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await withTimeout(supabase.auth.getUser(), AUTH_TIMEOUT_MS, 'supabase.auth.getUser');
     if (!user) return null;
     return {
       id: user.id,
