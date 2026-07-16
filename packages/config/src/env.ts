@@ -1,11 +1,19 @@
 import { z } from 'zod';
 
 /**
- * Environment validation. Fails fast with a readable error at boot.
+ * Environment validation — SELF-HEALING, never throws at runtime.
  *
- * In `DATA_MODE=demo` (the default) every paid/provider credential is OPTIONAL,
- * so the whole app runs locally with zero secrets. In `DATA_MODE=live`, the
- * relevant provider keys become required for the selected providers.
+ * `src/lib/env.ts` evaluates this at module import, which happens on the first
+ * request to any dynamic route. A throw here therefore 500s the entire site
+ * while static pages keep working — the worst possible failure mode, and easy
+ * to trigger with a pasted trailing space, surrounding quotes, a URL missing
+ * https://, or a wrong-case enum in a dashboard env editor.
+ *
+ * Strategy: sanitize raw values (trim, strip quotes, add https:// to bare
+ * hosts, case-fold enums), then parse; any field that STILL fails validation is
+ * dropped to its default with a recorded diagnostic instead of throwing. The
+ * `/api/health/env` endpoint exposes those diagnostics (never secret values) so
+ * a misconfigured deploy is observable instead of a mystery 500.
  */
 
 const providerSelector = z
@@ -91,24 +99,86 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/** Diagnostics from the last loadEnv() — safe to expose (names only, no values). */
+export interface EnvDiagnostics {
+  /** Fields whose values failed validation and were dropped to defaults. */
+  droppedKeys: string[];
+  /** Human-readable notes (sanitizations applied, downgrades, drops). */
+  warnings: string[];
+  /** True when DATA_MODE=live was downgraded to demo (Supabase missing/invalid). */
+  liveDowngraded: boolean;
+}
+
+const diagnostics: EnvDiagnostics = { droppedKeys: [], warnings: [], liveDowngraded: false };
+
+/** Fields that must be URLs — bare hosts get https:// prepended. */
+const URL_FIELDS = new Set([
+  'NEXT_PUBLIC_APP_URL',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'UPSTASH_REDIS_REST_URL',
+  'NEXT_PUBLIC_POSTHOG_HOST',
+  'VISION_SERVICE_URL',
+]);
+
+/** Fields whose values are case-insensitive enums — fold to lowercase. */
+const ENUM_FIELDS = new Set([
+  'NODE_ENV',
+  'DATA_MODE',
+  'PROVIDER_PRESET',
+  'CATALOG_PROVIDER',
+  'RECOGNITION_PROVIDER',
+  'RAW_PRICING_PROVIDER',
+  'GRADED_PRICING_PROVIDER',
+  'POPULATION_PROVIDER',
+  'CERTIFICATION_PROVIDER',
+  'ACTIVE_LISTINGS_PROVIDER',
+]);
+
 /**
- * Reconcile cross-field constraints WITHOUT ever throwing.
- *
- * A misconfigured env must never brick the app at runtime (Next.js loads this
- * lazily per dynamic route, so a throw here 500s pages one-by-one). Instead we
- * gracefully downgrade to demo mode and warn. Genuinely malformed values (wrong
- * types) are still rejected by the Zod parse below — that is a real boot error.
+ * Clean a single raw env value the way dashboards commonly mangle them:
+ * surrounding whitespace, pasted quotes, missing URL protocol, cased enums.
  */
+function sanitizeValue(key: string, raw: string): string {
+  let v = raw.trim();
+  // Strip one layer of matching surrounding quotes ("..." or '...').
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    v = v.slice(1, -1).trim();
+  }
+  if (ENUM_FIELDS.has(key)) v = v.toLowerCase();
+  if (URL_FIELDS.has(key) && v && !/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) {
+    v = `https://${v}`;
+  }
+  return v;
+}
+
+function sanitizeSource(source: Record<string, string | undefined>): Record<string, string | undefined> {
+  const keys = Object.keys(envSchema.shape) as Array<keyof typeof envSchema.shape>;
+  const out: Record<string, string | undefined> = {};
+  for (const key of keys) {
+    const raw = source[key as string];
+    if (raw === undefined) continue;
+    const cleaned = sanitizeValue(key as string, raw);
+    if (cleaned !== raw) {
+      diagnostics.warnings.push(`${String(key)}: value sanitized (whitespace/quotes/protocol/case)`);
+    }
+    // Empty string means "unset" — dashboards often save empties.
+    out[key as string] = cleaned === '' ? undefined : cleaned;
+  }
+  return out;
+}
+
+/** Cross-field reconciliation. Never throws. */
 function reconcile(env: Env): Env {
   if (
     env.DATA_MODE === 'live' &&
     (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   ) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      '[config] DATA_MODE=live but NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY ' +
-        'are not set — falling back to demo mode. Configure Supabase to enable live accounts.',
+    diagnostics.liveDowngraded = true;
+    diagnostics.warnings.push(
+      'DATA_MODE=live downgraded to demo: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY missing or invalid',
     );
+    // eslint-disable-next-line no-console
+    console.warn('[config] DATA_MODE=live but Supabase env is missing/invalid — falling back to demo mode.');
     return { ...env, DATA_MODE: 'demo' };
   }
   return env;
@@ -116,18 +186,42 @@ function reconcile(env: Env): Env {
 
 let cached: Env | null = null;
 
+/**
+ * Parse the environment. NEVER throws: invalid fields are dropped to their
+ * defaults and recorded in diagnostics. A misconfigured deploy must render
+ * pages (degraded, observable), not 500 the whole site.
+ */
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
   if (cached) return cached;
-  const parsed = envSchema.safeParse(source);
+  diagnostics.droppedKeys = [];
+  diagnostics.warnings = [];
+  diagnostics.liveDowngraded = false;
+
+  const sanitized = sanitizeSource(source);
+  let parsed = envSchema.safeParse(sanitized);
+
   if (!parsed.success) {
-    const flat = parsed.error.flatten().fieldErrors;
-    const lines = Object.entries(flat)
-      .map(([k, v]) => `  - ${k}: ${(v ?? []).join(', ')}`)
-      .join('\n');
-    throw new Error(`Invalid environment variables:\n${lines}`);
+    // Drop each offending field to its default rather than failing the boot.
+    const bad = new Set(parsed.error.issues.map((i) => String(i.path[0])));
+    for (const key of bad) {
+      diagnostics.droppedKeys.push(key);
+      diagnostics.warnings.push(`${key}: invalid value dropped (using default)`);
+      delete sanitized[key];
+    }
+    // eslint-disable-next-line no-console
+    console.warn(`[config] Dropped invalid env values for: ${[...bad].join(', ')}`);
+    parsed = envSchema.safeParse(sanitized);
   }
-  cached = reconcile(parsed.data);
+
+  // Last resort: pure defaults. envSchema.parse({}) cannot fail (all fields
+  // optional or defaulted), so the app always boots.
+  cached = reconcile(parsed.success ? parsed.data : envSchema.parse({}));
   return cached;
+}
+
+/** Names-only diagnostics for the health endpoint. Never contains values. */
+export function getEnvDiagnostics(): EnvDiagnostics {
+  return { ...diagnostics, droppedKeys: [...diagnostics.droppedKeys], warnings: [...diagnostics.warnings] };
 }
 
 /** Test-only: reset the memoized env. */
