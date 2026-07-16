@@ -26,6 +26,32 @@ export async function searchCards(query: string, limit = 20): Promise<Normalized
   return res.cards;
 }
 
+/** Score a set against a free-text query (name + series + year + language). */
+function scoreSetMatch(set: NormalizedSet, query: string): number {
+  const q = query.toLowerCase().trim();
+  if (!q) return 0;
+  const year = set.releaseDate?.slice(0, 4) ?? '';
+  const hay = `${set.name} ${set.series ?? ''} ${year} ${set.language}`.toLowerCase();
+  let score = 0;
+  if (hay.includes(q)) score += 1;
+  if (set.name.toLowerCase().startsWith(q)) score += 0.6;
+  for (const term of q.split(/\s+/)) {
+    if (!term) continue;
+    if (hay.includes(term)) score += 0.4;
+  }
+  return score;
+}
+
+export async function searchSets(query: string, limit = 10): Promise<NormalizedSet[]> {
+  const sets = await listSets();
+  return sets
+    .map((s) => ({ s, score: scoreSetMatch(s, query) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.s);
+}
+
 export async function listSets(): Promise<NormalizedSet[]> {
   return getRegistry().call('catalog', 'listSets', (a) => a.listSets({}), {
     key: 'catalog:sets',

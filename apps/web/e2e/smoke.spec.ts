@@ -20,6 +20,22 @@ test('set explorer lists sets and opens a card', async ({ page }) => {
   await expect(page).toHaveURL(/\/sets\//);
 });
 
+test('set explorer master search finds sets and cards', async ({ page }) => {
+  await page.goto('/sets');
+  const search = page.getByRole('combobox', { name: /search sets and cards/i });
+  await search.click();
+  await expect(page.getByText(/Try searching/i)).toBeVisible();
+
+  await search.fill('Base');
+  await expect(page.getByRole('option', { name: /Base Set/i }).first()).toBeVisible();
+  await expect(page.getByText(/matching set/i)).toBeVisible();
+
+  await search.fill('Charizard');
+  await expect(page.getByRole('option', { name: /Charizard/i }).first()).toBeVisible({
+    timeout: 5000,
+  });
+});
+
 test('card page shows raw and graded values', async ({ page }) => {
   await page.goto('/cards/base1-4');
   await expect(page.getByText(/Raw market value/i)).toBeVisible();

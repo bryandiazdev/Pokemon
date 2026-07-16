@@ -34,7 +34,9 @@ function findSet(externalId: string): NormalizedSet {
 function scoreMatch(card: NormalizedCard, q: string): number {
   const query = q.toLowerCase().trim();
   if (!query) return 0.1;
-  const hay = `${card.name} ${card.number} ${card.printedNumber ?? ''} ${card.rarity ?? ''}`.toLowerCase();
+  const setName = DEMO_SETS.find((s) => s.externalId === card.setExternalId)?.name ?? '';
+  const hay =
+    `${card.name} ${card.number} ${card.printedNumber ?? ''} ${card.rarity ?? ''} ${setName}`.toLowerCase();
   let score = 0;
   if (hay.includes(query)) score += 1;
   for (const term of query.split(/\s+/)) {
