@@ -96,9 +96,10 @@ export const envSchema = z.object({
   OPENAI_GRADE_MODEL: z.string().default('gpt-4o'),
   /**
    * Model for quick-scan card identification (reads name + collector number
-   * off one photo). Cheaper than grading; mini is plenty accurate for this.
+   * off the photo). gpt-4o reads tiny collector numbers and stylized names
+   * far more reliably than mini; override to gpt-4o-mini to save cost.
    */
-  OPENAI_SCAN_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_SCAN_MODEL: z.string().default('gpt-4o'),
 
   // Provider selectors.
   CATALOG_PROVIDER: providerSelector,

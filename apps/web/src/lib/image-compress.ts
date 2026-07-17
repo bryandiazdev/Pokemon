@@ -16,7 +16,9 @@ export async function compressImageFile(
   // Already small enough — skip the canvas pass.
   if (file.size <= 400_000 && file.type === 'image/jpeg') return file;
 
-  const bitmap = await createImageBitmap(file);
+  // Bake EXIF rotation in — library photos are often stored rotated, and a
+  // sideways card wrecks both OCR and vision reads.
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));

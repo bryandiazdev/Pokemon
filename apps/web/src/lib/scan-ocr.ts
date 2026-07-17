@@ -155,6 +155,41 @@ function preprocessBand(bitmap: ImageBitmap, band: Band, targetWidth: number): H
   return canvas;
 }
 
+/**
+ * Crop the bottom strip of the photo (where the collector number is printed)
+ * at native resolution, for the server vision pass. The tiny number is the
+ * hardest read on a downscaled full frame and the most valuable printing
+ * disambiguator, so it gets its own dedicated image. Returns a JPEG data URL,
+ * or null when the crop can't be produced.
+ */
+export async function cropNumberStrip(file: Blob): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const stripFrac = 0.26;
+    const sy = Math.floor(bitmap.height * (1 - stripFrac));
+    const sh = bitmap.height - sy;
+    // Native resolution up to 2000px wide — downscaling is what makes the
+    // number unreadable in the first place.
+    const scale = Math.min(1, 2000 / bitmap.width);
+    const w = Math.max(8, Math.round(bitmap.width * scale));
+    const h = Math.max(8, Math.round(sh * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return null;
+    }
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, sy, bitmap.width, sh, 0, 0, w, h);
+    bitmap.close();
+    return canvas.toDataURL('image/jpeg', 0.9);
+  } catch {
+    return null;
+  }
+}
+
 /** Mean-luma brightness and Laplacian-variance blurriness on a small copy. */
 export async function computeQuality(file: Blob): Promise<QualityMetrics> {
   const bitmap = await createImageBitmap(file);

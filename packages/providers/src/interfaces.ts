@@ -181,6 +181,12 @@ export interface CardImageInput {
   imageRef: string;
   language?: Language;
   /**
+   * Set resolved from OCR/vision hints (set name and/or printed set total).
+   * Used to scope + score the catalog search; a wrong guess degrades
+   * gracefully because the adapter falls back to an unscoped search.
+   */
+  setExternalId?: string;
+  /**
    * Optional OCR text extracted on-device or by a vision OCR pass. The
    * catalog-OCR recognition adapter uses these hints to rank candidates. A pure
    * image-recognition provider may ignore them.

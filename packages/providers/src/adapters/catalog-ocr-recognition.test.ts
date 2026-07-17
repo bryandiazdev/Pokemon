@@ -61,4 +61,82 @@ describe('catalog-ocr recognition', () => {
     expect(stringSimilarity("Farfetch'd", 'farfetch d')).toBeGreaterThan(0.8);
     expect(stringSimilarity('Charizard', 'Blastoise')).toBeLessThan(0.3);
   });
+
+  it('boosts candidates from the resolved set', () => {
+    const inSet = scoreCandidate(
+      card({ setExternalId: 'base1' }),
+      { name: 'Charizard', number: '4' },
+      undefined,
+      'base1',
+    );
+    const outOfSet = scoreCandidate(
+      card({ setExternalId: 'base4' }),
+      { name: 'Charizard', number: '4' },
+      undefined,
+      'base1',
+    );
+    expect(inSet.evidence.setMatch).toBe(true);
+    expect(inSet.score).toBeGreaterThan(outOfSet.score);
+  });
+
+  it('falls back to an unscoped search when the set-scoped search is empty', async () => {
+    const calls: Array<{ query: string; setExternalId?: string }> = [];
+    const catalog: CardCatalogProvider = {
+      name: 'test-catalog',
+      async searchCards(input) {
+        calls.push({ query: input.query, setExternalId: input.setExternalId });
+        // Empty when scoped to the (wrong) set; hits when unscoped.
+        return { cards: input.setExternalId ? [] : [card({})], nextCursor: null };
+      },
+      async getCard() {
+        return card({});
+      },
+      async getSet() {
+        throw new Error('not used');
+      },
+      async listSets() {
+        return [];
+      },
+    };
+    const provider = createCatalogOcrRecognition(catalog);
+    const result = await provider.identifyCard({
+      imageRef: 'data:image/jpeg;base64,x',
+      ocr: { name: 'Charizard', number: '4' },
+      setExternalId: 'wrong-set',
+    });
+    expect(calls[0]?.setExternalId).toBe('wrong-set');
+    expect(calls[1]?.setExternalId).toBeUndefined();
+    expect(result.candidates).toHaveLength(1);
+  });
+
+  it('retries with the longest name word when the full name finds nothing', async () => {
+    const calls: string[] = [];
+    const catalog: CardCatalogProvider = {
+      name: 'test-catalog',
+      async searchCards(input) {
+        calls.push(input.query);
+        // The misread suffix kills the full-name query; the bare Pokémon
+        // name succeeds.
+        return input.query.startsWith('Charizard cx')
+          ? { cards: [], nextCursor: null }
+          : { cards: [card({})], nextCursor: null };
+      },
+      async getCard() {
+        return card({});
+      },
+      async getSet() {
+        throw new Error('not used');
+      },
+      async listSets() {
+        return [];
+      },
+    };
+    const provider = createCatalogOcrRecognition(catalog);
+    const result = await provider.identifyCard({
+      imageRef: 'data:image/jpeg;base64,x',
+      ocr: { name: 'Charizard cx', number: '4' },
+    });
+    expect(calls).toEqual(['Charizard cx 4', 'Charizard 4']);
+    expect(result.candidates).toHaveLength(1);
+  });
 });

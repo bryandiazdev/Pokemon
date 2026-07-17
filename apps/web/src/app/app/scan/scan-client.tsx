@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { compressImageFile } from '@/lib/image-compress';
-import { runCardOcr, computeQuality } from '@/lib/scan-ocr';
+import { runCardOcr, computeQuality, cropNumberStrip } from '@/lib/scan-ocr';
 import { Camera, Images, ScanLine, AlertTriangle, Check } from 'lucide-react';
 
 interface Candidate {
@@ -38,6 +38,8 @@ export function ScanClient() {
   const [readText, setReadText] = useState<{ name: string | null; number: string | null } | null>(
     null,
   );
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [visionOff, setVisionOff] = useState(false);
   const [confirmed, setConfirmed] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -45,6 +47,7 @@ export function ScanClient() {
 
   async function identify(body: {
     imageRef: string;
+    numberCrop?: string;
     ocr?: { name?: string; number?: string; rawText?: string };
     quality?: { blur?: number; brightness?: number };
   }) {
@@ -71,6 +74,7 @@ export function ScanClient() {
     setCandidates(resBody.data.candidates);
     setRemaining(resBody.data.remaining);
     setReadText(resBody.data.readText ?? null);
+    setVisionOff(resBody.data.visionAvailable === false);
     setPhase('confirm');
   }
 
@@ -88,22 +92,28 @@ export function ScanClient() {
     setPhase('analyzing');
     setStatus('Preparing the photo…');
     try {
-      const file = await compressImageFile(raw);
-      const [quality, ocr] = await Promise.all([
+      // High fidelity for the vision pass; fall back to a smaller encode if
+      // a busy holo texture blows past the request size budget.
+      let file = await compressImageFile(raw, { maxEdge: 2000, quality: 0.88 });
+      let imageRef = await fileToDataUrl(file);
+      if (imageRef.length > 3_800_000) {
+        file = await compressImageFile(raw, { maxEdge: 1600, quality: 0.8 });
+        imageRef = await fileToDataUrl(file);
+      }
+      const [quality, ocr, numberCrop] = await Promise.all([
         computeQuality(file),
         (async () => {
           setStatus('Reading the card…');
           return runCardOcr(file);
         })(),
+        // Native-resolution bottom strip from the ORIGINAL photo — the tiny
+        // collector number survives there when the full frame is downscaled.
+        cropNumberStrip(raw),
       ]);
-      const imageRef = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
+      setPhotoUrl(imageRef);
       await identify({
         imageRef,
+        numberCrop: numberCrop && numberCrop.length <= 1_900_000 ? numberCrop : undefined,
         ocr: ocr.name || ocr.number ? ocr : undefined,
         quality,
       });
@@ -111,6 +121,15 @@ export function ScanClient() {
       setMessage('Could not analyze that photo. Try another one.');
       setPhase('rejected');
     }
+  }
+
+  function fileToDataUrl(file: Blob): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }
 
   async function save(c: Candidate) {
@@ -204,12 +223,33 @@ export function ScanClient() {
           </p>
           {remaining != null && <Badge tone="info">{remaining} scans left</Badge>}
         </div>
-        {readText && (readText.name || readText.number) && (
-          <p className="text-xs text-muted">
-            Read from the card: <span className="text-content">{readText.name ?? '—'}</span>
-            {readText.number && <span className="text-content"> · #{readText.number}</span>}
-          </p>
-        )}
+        <div className="flex items-start gap-3">
+          {photoUrl && (
+            <figure className="shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photoUrl}
+                alt="Your scanned card"
+                className="h-28 w-20 rounded object-cover ring-1 ring-border"
+              />
+              <figcaption className="mt-1 text-center text-[10px] text-muted">Your photo</figcaption>
+            </figure>
+          )}
+          <div className="space-y-1.5">
+            {readText && (readText.name || readText.number) && (
+              <p className="text-xs text-muted">
+                Read from the card: <span className="text-content">{readText.name ?? '—'}</span>
+                {readText.number && <span className="text-content"> · #{readText.number}</span>}
+              </p>
+            )}
+            {visionOff && (
+              <p className="text-xs text-warning">
+                Identified with on-device OCR only — server vision is off. Set OPENAI_API_KEY on the
+                server for far more reliable scans.
+              </p>
+            )}
+          </div>
+        </div>
         {message && <p className="text-xs text-warning">{message}</p>}
         <ul className="space-y-2">
           {candidates.map((c) => (

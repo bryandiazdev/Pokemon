@@ -69,6 +69,7 @@ export function scoreCandidate(
   card: NormalizedCard,
   ocr: NonNullable<CardImageInput['ocr']>,
   language?: string,
+  setExternalId?: string,
 ): Scored {
   const evidence: Record<string, unknown> = {};
   let score = 0;
@@ -76,7 +77,7 @@ export function scoreCandidate(
   if (ocr.name) {
     const sim = stringSimilarity(ocr.name, card.name);
     evidence.nameSimilarity = Number(sim.toFixed(3));
-    score += sim * 0.6;
+    score += sim * 0.55;
   }
   if (ocr.number) {
     const target = normalizeNumber(ocr.number);
@@ -87,13 +88,17 @@ export function scoreCandidate(
       score += 0.3;
     }
   }
-  if (ocr.setName && card.metadata && typeof card.metadata === 'object') {
-    // Set hint is soft; catalog search already biases toward the set.
+  if (setExternalId && card.setExternalId === setExternalId) {
+    // The caller resolved the printed set (from set name / "N of TOTAL") —
+    // matching it is the strongest printing disambiguator we have.
+    evidence.setMatch = true;
+    score += 0.15;
+  } else if (ocr.setName) {
     evidence.setHint = ocr.setName;
   }
   if (language && card.language === language) {
     evidence.languageMatch = true;
-    score += 0.1;
+    score += 0.05;
   }
   return { card, score: Math.min(1, score), evidence };
 }
@@ -125,12 +130,36 @@ export function createCatalogOcrRecognition(
         );
       }
 
-      // Query the catalog with the strongest available hint.
+      // Query the catalog with the strongest available hint, scoped to the
+      // resolved set when we have one. Each step falls back gracefully so a
+      // wrong set guess or an OCR-mangled suffix can't zero out the search.
       const query = [ocr.name, ocr.number].filter(Boolean).join(' ').trim();
-      const { cards } = await catalog.searchCards({ query, limit: 25, language: input.language });
+      let { cards } = await catalog.searchCards({
+        query,
+        limit: 25,
+        language: input.language,
+        setExternalId: input.setExternalId,
+      });
+      if (cards.length === 0 && input.setExternalId) {
+        ({ cards } = await catalog.searchCards({ query, limit: 25, language: input.language }));
+      }
+      if (cards.length === 0 && ocr.name && /\s/.test(ocr.name.trim())) {
+        // Multi-word names often fail on a misread suffix ("Charizard cx");
+        // retry with the longest word, which is usually the Pokémon itself.
+        const longest = ocr.name
+          .trim()
+          .split(/\s+/)
+          .sort((a, b) => b.length - a.length)[0]!;
+        const fallback = [longest, ocr.number].filter(Boolean).join(' ');
+        ({ cards } = await catalog.searchCards({
+          query: fallback,
+          limit: 25,
+          language: input.language,
+        }));
+      }
 
       const scored = cards
-        .map((card) => scoreCandidate(card, ocr, input.language))
+        .map((card) => scoreCandidate(card, ocr, input.language, input.setExternalId))
         .sort((a, b) => b.score - a.score)
         .slice(0, 4);
 
