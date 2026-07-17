@@ -53,7 +53,10 @@ export function stringSimilarity(a: string, b: string): number {
 
 /** Normalize a collector number like "199/165" or "SWSH244" for comparison. */
 function normalizeNumber(n: string | null | undefined): string {
-  return (n ?? '').toLowerCase().replace(/\s+/g, '').split('/')[0] ?? '';
+  const base = (n ?? '').toLowerCase().replace(/\s+/g, '').split('/')[0] ?? '';
+  // Printed numbers are often zero-padded ("058/165", "GG04/GG70") while
+  // catalog numbers usually aren't — treat "058" and "58" as the same number.
+  return base.replace(/^([a-z]*)0+(?=\d)/, '$1');
 }
 
 interface Scored {
@@ -140,6 +143,8 @@ export function createCatalogOcrRecognition(
         confidence: Number(s.score.toFixed(3)),
         ranking: i + 1,
         evidence: s.evidence,
+        imageSmallUrl: s.card.imageSmallUrl,
+        imageLargeUrl: s.card.imageLargeUrl,
       }));
 
       const top = candidates[0];

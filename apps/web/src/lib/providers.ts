@@ -46,10 +46,17 @@ function resolveSelectors(): ProviderConfig {
 
   const catalog = unset(process.env.CATALOG_PROVIDER) ? presetChoice() : env.CATALOG_PROVIDER;
   const rawPricing = unset(process.env.RAW_PRICING_PROVIDER) ? presetChoice() : env.RAW_PRICING_PROVIDER;
+  // Recognition rides the catalog: a live catalog implies the catalog-OCR
+  // scanner unless the selector was set explicitly.
+  const recognition = unset(process.env.RECOGNITION_PROVIDER)
+    ? catalog === 'demo'
+      ? 'demo'
+      : 'catalog-ocr'
+    : env.RECOGNITION_PROVIDER;
 
   return {
     catalog,
-    recognition: env.RECOGNITION_PROVIDER,
+    recognition,
     rawPricing,
     gradedPricing: env.GRADED_PRICING_PROVIDER,
     population: env.POPULATION_PROVIDER,

@@ -117,6 +117,9 @@ export interface CardRecognitionCandidate {
   confidence: number; // 0..1
   ranking: number;
   evidence?: Record<string, unknown>;
+  /** Catalog artwork so the user can confirm visually, not just by name. */
+  imageSmallUrl?: string | null;
+  imageLargeUrl?: string | null;
 }
 
 export interface CardRecognitionResult {

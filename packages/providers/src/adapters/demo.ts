@@ -98,6 +98,8 @@ const recognition: CardRecognitionProvider = {
       confidence: 0.6 - i * 0.12,
       ranking: i + 1,
       evidence: { demo: true },
+      imageSmallUrl: c.imageSmallUrl,
+      imageLargeUrl: c.imageLargeUrl,
     }));
     return { candidates: top, provider: NAME, requiresConfirmation: true };
   },

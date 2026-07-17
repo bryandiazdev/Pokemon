@@ -216,11 +216,12 @@ export function GradeClient() {
           </Badge>
         </CardHeader>
 
+        {/* No `capture` attribute: mobile browsers then offer both the camera
+            AND the photo library, instead of forcing a live capture. */}
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
-          capture="environment"
           className="sr-only"
           onChange={onFileChange}
           aria-hidden

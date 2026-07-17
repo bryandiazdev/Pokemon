@@ -92,13 +92,17 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxx
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxx
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:55322/postgres
-RECOGNITION_PROVIDER=catalog-ocr             # on-device OCR scanner
+OPENAI_API_KEY=sk-...                        # optional but recommended for scanning
 ```
 
 `pnpm dev`, then create an account at `/sign-up`. The signup trigger provisions
-your profile, entitlements, and default collection; the camera scanner reads the
-card with on-device OCR, matches it against the live catalog, and saves confirmed
-cards to your own RLS-scoped collection, valued at live prices.
+your profile, entitlements, and default collection. The scanner accepts a live
+photo **or a camera-roll upload**, reads the card on-device (Tesseract) and —
+when `OPENAI_API_KEY` is set — server-side with a vision model (far more
+reliable on holo/foil cards), matches it against the live catalog, and saves
+confirmed cards to your own RLS-scoped collection, valued at live prices.
+Recognition follows the preset automatically (`catalog-ocr` when the catalog
+is live); no separate `RECOGNITION_PROVIDER` line is needed.
 
 > This repo's `supabase/config.toml` uses ports `5532x` (offset from the default
 > `5432x`) so it can coexist with another local Supabase project on the same

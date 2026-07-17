@@ -94,6 +94,11 @@ export const envSchema = z.object({
   OPENAI_API_KEY: z.string().min(1).optional(),
   /** Defaults to gpt-4o (vision). Override e.g. gpt-4o-mini for cost. */
   OPENAI_GRADE_MODEL: z.string().default('gpt-4o'),
+  /**
+   * Model for quick-scan card identification (reads name + collector number
+   * off one photo). Cheaper than grading; mini is plenty accurate for this.
+   */
+  OPENAI_SCAN_MODEL: z.string().default('gpt-4o-mini'),
 
   // Provider selectors.
   CATALOG_PROVIDER: providerSelector,

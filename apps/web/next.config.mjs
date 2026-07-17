@@ -25,7 +25,10 @@ const nextConfig = {
     const supabaseWs = supabaseOrigin.replace(/^http/, 'ws');
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // jsdelivr: Tesseract.js workers importScripts() their engine from the
+      // CDN, and blob: workers inherit this page CSP — without the CDN here
+      // on-device OCR dies before it starts.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",

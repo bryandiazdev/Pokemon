@@ -4,25 +4,30 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Upload, ScanLine, AlertTriangle, Check } from 'lucide-react';
+import { compressImageFile } from '@/lib/image-compress';
+import { runCardOcr, computeQuality } from '@/lib/scan-ocr';
+import { Camera, Images, ScanLine, AlertTriangle, Check } from 'lucide-react';
 
 interface Candidate {
   cardExternalId?: string;
   cardName?: string;
+  setHint?: string;
   numberHint?: string;
   language?: string;
   confidence: number;
   ranking: number;
+  imageSmallUrl?: string | null;
 }
 
 type Phase = 'capture' | 'analyzing' | 'confirm' | 'rejected' | 'saved';
 
 /**
- * Real quick-scan. Captures a photo, runs on-device OCR (Tesseract.js — free,
- * private, no upload of the image bytes), extracts the card name + collector
- * number, and matches them against the LIVE catalog (TCGdex via the catalog-OCR
- * recognition adapter). Ranked candidates always require explicit confirmation
- * for look-alikes; confirming saves the card to your real collection.
+ * Real quick-scan. Take a photo or pick one from your library; the card is
+ * identified from the photo (on-device OCR first, upgraded by server-side
+ * vision when configured) and matched against the live catalog. Ranked
+ * candidates always require explicit confirmation for look-alikes; confirming
+ * saves the card to your real collection. Photos are analyzed in-memory and
+ * never stored.
  */
 export function ScanClient() {
   const [phase, setPhase] = useState<Phase>('capture');
@@ -30,86 +35,82 @@ export function ScanClient() {
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState('');
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [readText, setReadText] = useState<{ name: string | null; number: string | null } | null>(
+    null,
+  );
   const [confirmed, setConfirmed] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
 
-  async function runOcr(dataUrl: string): Promise<{ name?: string; number?: string; rawText?: string }> {
-    setStatus('Reading the card text on your device…');
-    // Load Tesseract lazily so it doesn't bloat the initial bundle.
-    const Tesseract = (await import('tesseract.js')).default;
-    const { data } = await Tesseract.recognize(dataUrl, 'eng');
-    const lines = (data.lines ?? []) as Array<{ text: string; bbox?: { y0: number } }>;
-    const heightOf = (l: { bbox?: { y0: number } }) => l.bbox?.y0 ?? 0;
-    const imgTop = Math.min(...lines.map(heightOf), 0);
-    const imgBottom = Math.max(...lines.map(heightOf), 1);
-    const topBand = imgTop + (imgBottom - imgTop) * 0.35;
-
-    // Name: the largest, mostly-alphabetic line in the top third of the card.
-    const nameCandidates = lines
-      .filter((l) => heightOf(l) <= topBand)
-      .map((l) => l.text.trim())
-      .filter((t) => t.replace(/[^A-Za-z]/g, '').length >= 3)
-      .filter((t) => !/^(hp|basic|stage|trainer|energy|illus|©)/i.test(t));
-    nameCandidates.sort(
-      (a, b) => b.replace(/[^A-Za-z]/g, '').length - a.replace(/[^A-Za-z]/g, '').length,
-    );
-    const name = nameCandidates[0]?.replace(/[^A-Za-z'’.\- ]/g, '').trim();
-
-    // Collector number: "4/102", "058/165", etc. (usually near the bottom).
-    const numMatch = data.text.match(/\b(\d{1,3})\s*\/\s*\d{1,3}\b/);
-    const number = numMatch ? String(parseInt(numMatch[1]!, 10)) : undefined;
-
-    return { name, number, rawText: data.text.slice(0, 2000) };
-  }
-
-  async function identify(ocr: { name?: string; number?: string }, quality?: Record<string, number>) {
-    setPhase('analyzing');
-    setStatus('Matching against the live catalog…');
+  async function identify(body: {
+    imageRef: string;
+    ocr?: { name?: string; number?: string; rawText?: string };
+    quality?: { blur?: number; brightness?: number };
+  }) {
+    setStatus('Matching against the catalog…');
     const res = await fetch('/api/scan/identify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageRef: 'camera', ocr, quality }),
+      body: JSON.stringify(body),
     });
-    const body = await res.json();
-    if (!body.success) {
-      setMessage(body.error.message);
+    const resBody = await res.json();
+    if (!resBody.success) {
+      setMessage(resBody.error.message);
       setPhase('rejected');
       return;
     }
-    if (!body.data.candidates?.length) {
+    if (!resBody.data.candidates?.length) {
+      const read = resBody.data.readText;
       setMessage(
-        `No catalog match for "${ocr.name ?? ''} ${ocr.number ?? ''}". Try a sharper, well-lit photo or search manually.`,
+        `No catalog match${read?.name ? ` for "${read.name}${read.number ? ` #${read.number}` : ''}"` : ''}. Try a sharper, well-lit photo or search manually.`,
       );
       setPhase('rejected');
       return;
     }
-    setCandidates(body.data.candidates);
-    setRemaining(body.data.remaining);
+    setCandidates(resBody.data.candidates);
+    setRemaining(resBody.data.remaining);
+    setReadText(resBody.data.readText ?? null);
     setPhase('confirm');
   }
 
-  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = String(reader.result);
-      setPhase('analyzing');
-      try {
-        const ocr = await runOcr(dataUrl);
-        if (!ocr.name && !ocr.number) {
-          setMessage('Could not read any text — retake in brighter, even light with the card flat and in focus.');
-          setPhase('rejected');
-          return;
-        }
-        await identify(ocr, { blur: 0.2, glare: 0.1, coverage: 0.7, brightness: 0.6 });
-      } catch {
-        setMessage('OCR failed to run. Try uploading a clearer photo.');
-        setPhase('rejected');
-      }
-    };
-    reader.readAsDataURL(file);
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.files?.[0];
+    // Reset so picking the same file again still fires onChange.
+    e.target.value = '';
+    if (!raw) return;
+    if (!raw.type.startsWith('image/')) {
+      setMessage('Please choose a photo (JPEG, PNG, or WebP).');
+      setPhase('rejected');
+      return;
+    }
+
+    setPhase('analyzing');
+    setStatus('Preparing the photo…');
+    try {
+      const file = await compressImageFile(raw);
+      const [quality, ocr] = await Promise.all([
+        computeQuality(file),
+        (async () => {
+          setStatus('Reading the card…');
+          return runCardOcr(file);
+        })(),
+      ]);
+      const imageRef = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      await identify({
+        imageRef,
+        ocr: ocr.name || ocr.number ? ocr : undefined,
+        quality,
+      });
+    } catch {
+      setMessage('Could not analyze that photo. Try another one.');
+      setPhase('rejected');
+    }
   }
 
   async function save(c: Candidate) {
@@ -203,6 +204,12 @@ export function ScanClient() {
           </p>
           {remaining != null && <Badge tone="info">{remaining} scans left</Badge>}
         </div>
+        {readText && (readText.name || readText.number) && (
+          <p className="text-xs text-muted">
+            Read from the card: <span className="text-content">{readText.name ?? '—'}</span>
+            {readText.number && <span className="text-content"> · #{readText.number}</span>}
+          </p>
+        )}
         {message && <p className="text-xs text-warning">{message}</p>}
         <ul className="space-y-2">
           {candidates.map((c) => (
@@ -211,9 +218,21 @@ export function ScanClient() {
                 type="button"
                 disabled={saving}
                 onClick={() => save(c)}
-                className="flex w-full items-center justify-between rounded-lg border border-border bg-surface p-3 text-left hover:border-accent disabled:opacity-50"
+                className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface p-3 text-left hover:border-accent disabled:opacity-50"
               >
-                <div>
+                {c.imageSmallUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={c.imageSmallUrl}
+                    alt={c.cardName ?? 'Card'}
+                    className="h-20 w-[57px] shrink-0 rounded object-cover ring-1 ring-border"
+                  />
+                ) : (
+                  <span className="flex h-20 w-[57px] shrink-0 items-center justify-center rounded bg-bg text-faint ring-1 ring-border">
+                    <ScanLine size={16} aria-hidden />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
                   <div className="font-medium">{c.cardName}</div>
                   <div className="text-xs text-muted">
                     #{c.numberHint} · {c.language?.toUpperCase()} · {c.cardExternalId}
@@ -248,21 +267,32 @@ export function ScanClient() {
           <span className="absolute bottom-2 text-[11px]">Align card in frame</span>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
-          <Button onClick={() => fileRef.current?.click()}>
-            <Upload size={16} /> Scan / upload photo
+          <Button onClick={() => cameraRef.current?.click()}>
+            <Camera size={16} /> Take photo
+          </Button>
+          <Button variant="secondary" onClick={() => libraryRef.current?.click()}>
+            <Images size={16} /> Choose from library
           </Button>
           <Button
-            variant="secondary"
-            onClick={() =>
-              identify({ name: 'Charizard', number: '4' }, { blur: 0.2, glare: 0.1, coverage: 0.7, brightness: 0.6 })
-            }
+            variant="ghost"
+            onClick={() => identify({ imageRef: 'camera', ocr: { name: 'Charizard', number: '4' } })}
           >
             Try a sample (Charizard)
           </Button>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onFile} className="hidden" />
+        {/* `capture` steers straight to the camera; the library input omits it
+            so the OS offers the photo picker. */}
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={onFile}
+          className="hidden"
+        />
+        <input ref={libraryRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
         <p className="text-center text-[11px] text-muted">
-          Text is read on your device with OCR — the photo isn’t uploaded.
+          Your photo is analyzed to identify the card, then discarded — never stored.
         </p>
       </Card>
       <p className="text-center text-xs text-muted">
