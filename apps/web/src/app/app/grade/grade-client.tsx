@@ -102,6 +102,9 @@ export function GradeClient() {
 
   const requiredDone = CAPTURES.filter((c) => c.required).every((c) => slots[c.key]);
   const uploadedCount = Object.keys(slots).length;
+  const softRequired = CAPTURES.filter((c) => c.required && slots[c.key]?.soft).map(
+    (c) => c.label,
+  );
 
   function openPicker(key: CaptureKey) {
     setActiveKey(key);
@@ -122,9 +125,9 @@ export function GradeClient() {
 
     setError('');
     try {
-      // Grading needs fine surface detail — keep captures at high fidelity
-      // (2400px comfortably fits Claude's 2576px high-res vision input).
-      const file = await compressImageFile(raw, { maxEdge: 2400, quality: 0.9 });
+      // Grading needs fine surface detail — 2576px is exactly Claude's
+      // high-res vision long edge, so nothing is wasted or lost.
+      const file = await compressImageFile(raw, { maxEdge: 2576, quality: 0.92 });
       // Warn on soft focus BEFORE analysis so blurry photos get retaken
       // instead of producing a low-confidence grade.
       let soft = false;
@@ -345,9 +348,39 @@ export function GradeClient() {
         </p>
       )}
 
-      <Button variant="holo" onClick={runAnalysis} disabled={!requiredDone || loading}>
-        {loading ? 'Analyzing photos…' : 'Run Grade Potential analysis'}
-      </Button>
+      {requiredDone && softRequired.length > 0 && !loading && (
+        <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-sm text-warning">
+          <p className="flex items-start gap-2">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+            <span>
+              {softRequired.join(' and ')} look{softRequired.length === 1 ? 's' : ''} out of
+              focus. Soft photos hide the surface detail that separates an 8 from a 10 — the
+              analysis would understate your card. Tap the flagged photo{softRequired.length === 1 ? '' : 's'}{' '}
+              to retake: hold 6–8 in / 15–20 cm away, tap the card on your camera screen to lock
+              focus, and keep still for a beat after the shutter.
+            </span>
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="holo"
+          onClick={runAnalysis}
+          disabled={!requiredDone || loading || softRequired.length > 0}
+        >
+          {loading ? 'Analyzing photos…' : 'Run Grade Potential analysis'}
+        </Button>
+        {requiredDone && softRequired.length > 0 && !loading && (
+          <button
+            type="button"
+            onClick={runAnalysis}
+            className="text-xs text-muted underline-offset-2 hover:text-content hover:underline"
+          >
+            My photos are sharp — analyze anyway
+          </button>
+        )}
+      </div>
       {!requiredDone && (
         <p className="text-xs text-muted">Upload the three required photos to run the analysis.</p>
       )}

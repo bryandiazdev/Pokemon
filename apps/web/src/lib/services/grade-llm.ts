@@ -11,8 +11,9 @@ import { getAnthropic, rethrowAnthropic, toAllowedMedia } from './anthropic';
  *
  * Providers: Anthropic (Claude, preferred when ANTHROPIC_API_KEY is set) and
  * OpenAI (fallback). This is still an *estimate* — never a professional
- * grade. The model is asked to be conservative and honest about
- * uncertainty / image limits.
+ * grade. The model scores against explicit anchors (deduct only for observed
+ * defects; photo limitations flow into imageQuality, not condition scores) so
+ * clean cards aren't hedged into the middle of the scale.
  */
 
 export interface LlmGradeAnalysis {
@@ -103,11 +104,13 @@ const SYSTEM_PROMPT = `You are an expert Pokémon TCG card condition analyst ass
 
 You receive labeled photos of the SAME physical card (front, back, angled light, optional corner close-ups).
 
-Rules:
-- Be CONSERVATIVE. Prefer under-scoring over optimism. Cameras miss micro-scratches and print lines.
-- Score each category 0–100 (100 = gem-mint appearance in the photos).
-- imageQuality reflects focus, glare, framing, and lighting — not card condition.
-- If a photo is too poor to judge a category, lower that score and imageQuality, and suggest a recapture.
+Score what you can SEE — anchored, not hedged:
+- Score each condition category 0–100 by the evidence in the photos. Deduct points ONLY for defects you can actually observe and name. If a category shows no visible defect at this resolution, it scores 90–97. Reserve 98–100 for categories that remain flawless under the angled-light shot.
+- Anchors: 90–97 = no visible defect; 80–89 = one or two minor visible flaws (a soft corner tip, a small edge nick, light surface marks); 65–79 = clearly visible wear in that category; 40–64 = heavy wear; below 40 = damage.
+- Centering: judge the printed borders geometrically (left/right and top/bottom ratios). This is measurable from a straight-on photo — do not hedge it, measure it.
+- DO NOT lower condition scores because of photo limitations (softness, glare, framing). Photo problems affect imageQuality ONLY. Never express uncertainty by pulling condition scores toward the middle — an unverifiable micro-defect is expressed through imageQuality and a suggested recapture, not through a lower surface score.
+- imageQuality anchors: 90+ = tack-sharp front and back, corners resolvable; 70–89 = usable but soft in places; 45–69 = readable but too soft to clear a card for high grades; below 45 = unusable, request retakes.
+- Every finding you report must name a defect you observed in a specific photo. No speculative findings.
 - Never claim a guaranteed PSA/BGS grade. This is an estimate only.
 - Ignore sleeves, fingers, and background when possible; if they obscure the card, say so.
 - Respond with ONLY valid JSON matching the schema (no markdown fences).`;

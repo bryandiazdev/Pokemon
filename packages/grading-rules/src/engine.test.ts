@@ -30,6 +30,43 @@ describe('grade engine', () => {
     expect(r.limitingDefects.length).toBeGreaterThan(0);
   });
 
+  it('lets a card with no visible defects reach a 9-10 ceiling (anchored calibration)', () => {
+    // Analyzer anchors: 90-97 per category = no visible defect.
+    const clean = evaluateGrade({
+      centering: 93,
+      corner: 92,
+      edge: 91,
+      surface: 90,
+      structural: 95,
+      imageQuality: 85,
+    });
+    expect(clean.estimatedCeiling).toBeGreaterThanOrEqual(9);
+    expect(clean.estimatedMinGrade).toBeGreaterThanOrEqual(8);
+
+    const flawless = evaluateGrade({
+      centering: 97,
+      corner: 97,
+      edge: 96,
+      surface: 96,
+      structural: 98,
+      imageQuality: 92,
+    });
+    expect(flawless.estimatedCeiling).toBe(10);
+  });
+
+  it('holds a minor-flaw card to an 8 ceiling', () => {
+    // One soft corner (80s band), everything else clean.
+    const r = evaluateGrade({
+      centering: 90,
+      corner: 82,
+      edge: 90,
+      surface: 88,
+      structural: 95,
+      imageQuality: 85,
+    });
+    expect(r.estimatedCeiling).toBe(8);
+  });
+
   it('refuses a confident result on poor image quality', () => {
     const r = evaluateGrade({
       centering: 96,

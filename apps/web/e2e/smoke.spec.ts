@@ -97,8 +97,11 @@ test('grade flow gates on required photo uploads and produces a report', async (
     });
   }
 
-  await expect(runButton).toBeEnabled();
-  await runButton.click();
+  // 1×1 uploads are maximally "soft": the sharpness gate must flag them,
+  // disable the primary action, and offer the analyze-anyway escape hatch.
+  await expect(page.getByText(/out of focus/i)).toBeVisible();
+  await expect(runButton).toBeDisabled();
+  await page.getByRole('button', { name: /analyze anyway/i }).click();
   await expect(page.getByText(/Grade Potential report/i)).toBeVisible({ timeout: 15_000 });
 });
 

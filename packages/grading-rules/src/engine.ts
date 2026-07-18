@@ -37,14 +37,22 @@ export interface GradeEstimate {
 
 const IMAGE_QUALITY_FLOOR = 45; // below this we refuse a high-confidence result
 
-/** Map an average sub-score (0-100) to a coarse grade on a 1-10 scale. */
+/**
+ * Map an average sub-score (0-100) to a coarse grade CEILING on a 1-10 scale.
+ *
+ * Calibrated against the analyzer's scoring anchors (90-97 = no visible
+ * defect in that category; 80s = a minor visible flaw): a card with no
+ * observable defects should be able to reach a 9-10 ceiling, not stall at 7.
+ * The ceiling is still an upper bound — the range's min and the confidence
+ * carry the uncertainty.
+ */
 function scoreToGrade(score: number): number {
-  if (score >= 97) return 10;
-  if (score >= 92) return 9;
-  if (score >= 85) return 8;
-  if (score >= 75) return 7;
-  if (score >= 65) return 6;
-  if (score >= 50) return 5;
+  if (score >= 96) return 10;
+  if (score >= 90) return 9;
+  if (score >= 82) return 8;
+  if (score >= 72) return 7;
+  if (score >= 60) return 6;
+  if (score >= 48) return 5;
   if (score >= 35) return 4;
   if (score >= 20) return 3;
   return 2;
