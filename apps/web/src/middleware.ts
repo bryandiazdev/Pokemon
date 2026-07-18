@@ -37,7 +37,7 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const response = NextResponse.next({ request });
+  let response = NextResponse.next({ request });
   if (!supabaseUrlUsable(supabaseUrl) || !anonKey) return response;
 
   // Session refresh is best-effort. If Supabase is unreachable or misconfigured
@@ -50,6 +50,16 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(items: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          // CRITICAL: refreshed tokens must reach BOTH sides —
+          // 1. request.cookies, so Server Components rendering THIS request
+          //    read the fresh token (otherwise they see the expired one and
+          //    attempt a second refresh with an already-consumed refresh
+          //    token, which can revoke the whole session), and
+          // 2. response.cookies, so the browser stores them for next time.
+          for (const { name, value } of items) {
+            request.cookies.set(name, value);
+          }
+          response = NextResponse.next({ request });
           for (const { name, value, options } of items) {
             response.cookies.set(name, value, options as never);
           }

@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { DEMO_USER } from '@psr/testing';
 import { getServerSupabase } from './supabase/server';
 import { hasSupabase } from './env';
@@ -10,8 +11,13 @@ export interface CurrentUser {
   isDemo: boolean;
 }
 
-/** Cap how long we wait on Supabase auth so a hung project can't 500 the page. */
-const AUTH_TIMEOUT_MS = 2_500;
+/**
+ * Cap how long we wait on Supabase auth so a hung project can't 500 the page.
+ * Generous on purpose: a timeout renders the user as signed OUT, and a cold
+ * serverless start plus a cross-region auth call can exceed a tight budget —
+ * flickering users out of their session is worse than a slow first paint.
+ */
+const AUTH_TIMEOUT_MS = 6_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -33,8 +39,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * Resolve the current user. In demo mode (no Supabase configured) we return the
  * seeded demo user so the whole app is explorable without sign-in. In live mode
  * this reads the authenticated Supabase session.
+ *
+ * Wrapped in React cache(): layouts, pages, and services all call this during
+ * one render — they get ONE auth verdict per request instead of racing
+ * several network calls that can disagree.
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!hasSupabase) {
     return {
       id: DEMO_USER.id,
@@ -62,7 +72,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     console.error('[auth] getCurrentUser failed; treating as unauthenticated:', err);
     return null;
   }
-}
+});
 
 /** For protected routes: return the user or throw an auth sentinel. */
 export async function requireUser(): Promise<CurrentUser> {
