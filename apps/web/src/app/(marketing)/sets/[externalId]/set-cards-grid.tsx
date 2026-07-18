@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ImageIcon } from 'lucide-react';
 import type { NormalizedCard } from '@psr/providers';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -79,8 +79,25 @@ export function SetCardsGrid({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {cards.map((card) => (
           <Link key={card.externalId} href={`/cards/${card.externalId}`}>
-            <Card className="h-full transition-colors hover:border-accent/50">
-              <div className="flex items-start justify-between gap-2">
+            <Card className="flex h-full flex-col transition-colors hover:border-accent/50">
+              <div className="flex aspect-[2.5/3.5] items-center justify-center rounded-lg bg-bg-deep/50 p-1.5">
+                {card.imageSmallUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={card.imageSmallUrl}
+                    alt={`${card.name} #${card.number}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full rounded-md object-contain"
+                  />
+                ) : (
+                  <span className="flex flex-col items-center gap-1.5 text-faint">
+                    <ImageIcon size={24} aria-hidden />
+                    <span className="text-[11px]">No image</span>
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-medium sm:text-base">{card.name}</h3>
                   <p className="text-xs text-muted">#{card.number}</p>
