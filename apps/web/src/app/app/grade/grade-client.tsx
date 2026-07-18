@@ -6,8 +6,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { GradeDisclaimer } from '@/components/disclaimer';
 import { RadarMark } from '@/components/brand';
-import { compressImageFile } from '@/lib/image-compress';
-import { CheckCircle2, Circle, Camera, Upload, RotateCcw, X, ImageIcon } from 'lucide-react';
+import { compressImageFile, fitFilesToBudget } from '@/lib/image-compress';
+import { computeQuality } from '@/lib/scan-ocr';
+import { CheckCircle2, Circle, Camera, Upload, RotateCcw, X, ImageIcon, AlertTriangle } from 'lucide-react';
 
 const CAPTURES = [
   {
@@ -59,6 +60,8 @@ type CaptureKey = (typeof CAPTURES)[number]['key'];
 interface CaptureSlot {
   file: File;
   previewUrl: string;
+  /** Client-side sharpness check flagged this capture as soft/blurry. */
+  soft?: boolean;
 }
 
 interface Estimate {
@@ -119,12 +122,23 @@ export function GradeClient() {
 
     setError('');
     try {
-      const file = await compressImageFile(raw);
+      // Grading needs fine surface detail — keep captures at high fidelity
+      // (2400px comfortably fits Claude's 2576px high-res vision input).
+      const file = await compressImageFile(raw, { maxEdge: 2400, quality: 0.9 });
+      // Warn on soft focus BEFORE analysis so blurry photos get retaken
+      // instead of producing a low-confidence grade.
+      let soft = false;
+      try {
+        const q = await computeQuality(file);
+        soft = q.blur > 0.55;
+      } catch {
+        // sharpness check is best-effort
+      }
       const previewUrl = URL.createObjectURL(file);
       setSlots((prev) => {
         const existing = prev[key];
         if (existing) URL.revokeObjectURL(existing.previewUrl);
-        return { ...prev, [key]: { file, previewUrl } };
+        return { ...prev, [key]: { file, previewUrl, soft } };
       });
     } catch {
       setError('Could not read that photo. Try another image.');
@@ -157,13 +171,18 @@ export function GradeClient() {
     setLoading(true);
     setError('');
 
+    // High-fidelity captures can outgrow serverless body limits — step the
+    // largest files down until the combined payload fits.
+    const present = CAPTURES.filter((c) => slots[c.key]);
+    const budgeted = await fitFilesToBudget(
+      present.map((c) => slots[c.key]!.file),
+      3_900_000,
+    );
     const form = new FormData();
-    for (const cap of CAPTURES) {
-      const slot = slots[cap.key];
-      if (!slot) continue;
-      form.append('files', slot.file, `${cap.key}.jpg`);
+    present.forEach((cap, i) => {
+      form.append('files', budgeted[i]!, `${cap.key}.jpg`);
       form.append('capture_types', cap.key);
-    }
+    });
     form.append('cardExternalId', 'base1-4');
 
     try {
@@ -204,7 +223,8 @@ export function GradeClient() {
           <li>· Remove the card from sleeves and top loaders.</li>
           <li>· Use a clean, dark, non-reflective background and bright indirect light.</li>
           <li>· Keep the card flat and the camera parallel (except the angled shot).</li>
-          <li>· Upload from your camera roll or take a new photo — avoid filters.</li>
+          <li>· In the camera, tap the card on screen to focus, then hold steady a beat.</li>
+          <li>· Upload from your camera roll or take a new photo — avoid filters or zoom.</li>
         </ul>
       </Card>
 
@@ -273,6 +293,12 @@ export function GradeClient() {
                         {c.required && !done && <Badge tone="warning">REQ</Badge>}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted">{c.hint}</span>
+                      {slot?.soft && (
+                        <span className="mt-1 flex items-center gap-1 text-xs text-warning">
+                          <AlertTriangle size={12} aria-hidden />
+                          Looks soft — tap to focus on the card, hold steady, and retake.
+                        </span>
+                      )}
                       <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent">
                         {done ? (
                           <>

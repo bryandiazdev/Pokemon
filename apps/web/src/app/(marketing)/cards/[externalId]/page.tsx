@@ -248,7 +248,10 @@ export default async function CardPage({ params }: Params) {
         </div>
         <p className="mt-3 text-xs text-muted">
           Grading-company names are trademarks of their owners, shown for identification and
-          comparison only. Values are illustrative demo data.
+          comparison only.{' '}
+          {pricing.graded[0]?.freshness === 'live'
+            ? 'Live market values via PriceCharting, derived from sold listings; grades 7–9.5 aggregate across grading companies.'
+            : 'Values are illustrative demo data.'}
         </p>
       </Card>
 

@@ -53,16 +53,24 @@ function resolveSelectors(): ProviderConfig {
       ? 'demo'
       : 'catalog-ocr'
     : env.RECOGNITION_PROVIDER;
+  // Graded pricing goes live automatically when a PriceCharting key exists
+  // (needs a live catalog to resolve card names for the lookup).
+  const gradedPricing = unset(process.env.GRADED_PRICING_PROVIDER)
+    ? env.PRICECHARTING_API_KEY && catalog !== 'demo'
+      ? 'pricecharting'
+      : 'demo'
+    : env.GRADED_PRICING_PROVIDER;
 
   return {
     catalog,
     recognition,
     rawPricing,
-    gradedPricing: env.GRADED_PRICING_PROVIDER,
+    gradedPricing,
     population: env.POPULATION_PROVIDER,
     certification: env.CERTIFICATION_PROVIDER,
     activeListings: env.ACTIVE_LISTINGS_PROVIDER,
     pokemonTcgApiKey: env.POKEMON_TCG_API_KEY,
+    priceChartingApiKey: env.PRICECHARTING_API_KEY,
   };
 }
 

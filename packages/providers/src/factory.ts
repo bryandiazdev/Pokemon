@@ -11,6 +11,7 @@ import { createPokemonTcgCatalog } from './adapters/pokemontcg';
 import { createPokemonTcgRawPricing } from './adapters/pokemontcg-pricing';
 import { createTcgdexCatalog, createTcgdexRawPricing } from './adapters/tcgdex';
 import { createCatalogOcrRecognition } from './adapters/catalog-ocr-recognition';
+import { createPriceChartingGradedPricing } from './adapters/pricecharting';
 
 export interface ProviderConfig {
   catalog: string;
@@ -21,6 +22,7 @@ export interface ProviderConfig {
   certification: string;
   activeListings: string;
   pokemonTcgApiKey?: string;
+  priceChartingApiKey?: string;
 }
 
 export function buildRegistry(
@@ -65,9 +67,18 @@ export function buildRegistry(
     primary.rawPricing = demo.rawPricing;
   }
 
+  // Graded pricing: PriceCharting (paid key) is the live option, else demo.
+  if (config.gradedPricing === 'pricecharting' && config.priceChartingApiKey) {
+    primary.gradedPricing = createPriceChartingGradedPricing(primary.catalog!, {
+      apiKey: config.priceChartingApiKey,
+    });
+  } else {
+    if (config.gradedPricing !== 'demo') warn('gradedPricing', config.gradedPricing);
+    primary.gradedPricing = demo.gradedPricing;
+  }
+
   // Remaining capabilities: only demo adapters are implemented in this build.
   const remaining: [Capability, keyof ProviderConfig][] = [
-    ['gradedPricing', 'gradedPricing'],
     ['population', 'population'],
     ['certification', 'certification'],
     ['activeListings', 'activeListings'],
