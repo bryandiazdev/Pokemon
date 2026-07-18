@@ -42,6 +42,32 @@ test('card page shows raw and graded values', async ({ page }) => {
   await expect(page.getByText(/Graded market values/i)).toBeVisible();
 });
 
+test('card page offers collection tracking (sign-in prompt when signed out)', async ({ page }) => {
+  await page.goto('/cards/base1-4');
+  await expect(page.getByText(/to track this card in your collection/i)).toBeVisible();
+});
+
+test('collection renders an image grid with remove controls', async ({ page }) => {
+  await page.goto('/app/collection');
+  const removeButtons = page.getByRole('button', { name: /^Remove / });
+  await expect(removeButtons.first()).toBeVisible();
+
+  // The button is server-rendered before React attaches its handler — retry
+  // the click until hydration makes it arm the two-step confirm.
+  await expect(async () => {
+    await removeButtons.first().click();
+    await expect(page.getByText('Remove?').first()).toBeVisible({ timeout: 1500 });
+  }).toPass({ timeout: 30_000 });
+
+  // Demo mode: removing requires a real account — the second tap yields an
+  // honest sign-in message instead of a fake deletion.
+  await removeButtons.first().click();
+  // Generous timeout: the DELETE route may cold-compile on a dev server.
+  await expect(page.getByText(/Sign in to manage your collection/i)).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
 test('dashboard shows portfolio value in demo mode', async ({ page }) => {
   await page.goto('/app');
   await expect(page.getByText(/Total value/i)).toBeVisible();

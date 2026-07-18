@@ -2,6 +2,7 @@ import 'server-only';
 import { DEMO_COLLECTION_ITEMS } from '@psr/testing';
 import { getRegistry } from '../providers';
 import { toUsdPrices } from './fx';
+import { getCard as getCatalogCard } from './catalog';
 import { getCurrentUser } from '../auth';
 import { listCollectionItems } from './collection';
 import {
@@ -26,6 +27,7 @@ export interface ValuedItem {
   id: string;
   cardExternalId: string;
   name: string;
+  imageUrl: string | null;
   quantity: number;
   ownershipType: 'raw' | 'graded';
   gradeLabel: string | null;
@@ -58,6 +60,7 @@ interface ValuationInput {
   id: string;
   cardExternalId: string | null;
   name: string;
+  imageUrl: string | null;
   quantity: number;
   ownershipType: 'raw' | 'graded';
   rawCondition?: RawCondition | null;
@@ -114,6 +117,7 @@ async function valueItems(inputs: ValuationInput[]): Promise<ValuedItem[]> {
         id: item.id,
         cardExternalId: item.cardExternalId ?? '',
         name: item.name,
+        imageUrl: item.imageUrl,
         quantity: item.quantity,
         ownershipType: item.ownershipType,
         gradeLabel: item.gradeLabel,
@@ -137,6 +141,7 @@ async function valueItems(inputs: ValuationInput[]): Promise<ValuedItem[]> {
         id: item.id,
         cardExternalId: item.cardExternalId ?? '',
         name: item.name,
+        imageUrl: item.imageUrl,
         quantity: item.quantity,
         ownershipType: item.ownershipType,
         gradeLabel: item.gradeLabel,
@@ -158,6 +163,7 @@ async function liveInputs(userId: string): Promise<ValuationInput[]> {
     id: i.id,
     cardExternalId: i.cardExternalId,
     name: i.setName ? `${i.name} — ${i.setName}` : i.name,
+    imageUrl: i.imageUrl,
     quantity: i.quantity,
     ownershipType: i.ownershipType,
     rawCondition: i.rawCondition,
@@ -179,6 +185,7 @@ function demoInputs(): ValuationInput[] {
     id: item.id,
     cardExternalId: item.cardExternalId,
     name: cardName(item.cardExternalId),
+    imageUrl: null,
     quantity: item.quantity,
     ownershipType: item.ownershipType,
     rawCondition: 'rawCondition' in item ? item.rawCondition : null,
@@ -204,6 +211,17 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
     // eslint-disable-next-line no-console
     console.error('[portfolio] falling back to demo inputs:', err);
     inputs = demoInputs();
+  }
+  // Backfill missing artwork from the (cached) catalog so the collection grid
+  // has images even for demo items or rows persisted before images were stored.
+  for (const input of inputs) {
+    if (input.imageUrl || !input.cardExternalId) continue;
+    try {
+      const card = await getCatalogCard(input.cardExternalId);
+      input.imageUrl = card.imageSmallUrl ?? card.imageLargeUrl ?? null;
+    } catch {
+      // no artwork available — the grid shows a placeholder
+    }
   }
   const valued = await valueItems(inputs);
   const freshness: PortfolioSummary['freshness'] = live ? 'live' : 'demo';

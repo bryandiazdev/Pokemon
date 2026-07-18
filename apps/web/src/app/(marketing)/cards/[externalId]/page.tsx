@@ -14,6 +14,9 @@ import {
 } from '@/lib/services/catalog';
 import { fmtMinor } from '@/lib/format';
 import { RAW_CONDITIONS, type RawCondition } from '@psr/types';
+import { getCurrentUser } from '@/lib/auth';
+import { listCollectionItems } from '@/lib/services/collection';
+import { CollectionActions, type OwnedCopy } from '@/components/card/collection-actions';
 import { ScanLine, Eye, Bell } from 'lucide-react';
 
 interface Params {
@@ -56,6 +59,29 @@ export default async function CardPage({ params }: Params) {
     getRawHistory(externalId, 90),
     getPopulation(externalId, 'psa').catch(() => null),
   ]);
+
+  // Signed-in users see (and can manage) their copies of this card.
+  let signedIn = false;
+  let owned: OwnedCopy[] = [];
+  try {
+    const user = await getCurrentUser();
+    signedIn = Boolean(user && !user.isDemo);
+    if (signedIn) {
+      const items = await listCollectionItems(user!.id);
+      owned = items
+        .filter((i) => i.cardExternalId === externalId)
+        .map((i) => ({
+          id: i.id,
+          quantity: i.quantity,
+          label:
+            i.ownershipType === 'graded'
+              ? `${i.gradingCompany?.toUpperCase() ?? ''} ${i.grade ?? ''}`.trim()
+              : (i.rawCondition ?? 'near_mint').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+        }));
+    }
+  } catch {
+    // Collection lookup is an enhancement — the card page renders without it.
+  }
 
   // Everything is USD; prefer native TCGplayer USD prices over Cardmarket
   // values that were FX-converted from EUR.
@@ -119,6 +145,12 @@ export default async function CardPage({ params }: Params) {
               <Bell size={15} />
             </Link>
           </div>
+          <CollectionActions
+            cardExternalId={externalId}
+            cardName={card.name}
+            owned={owned}
+            signedIn={signedIn}
+          />
         </div>
 
         <div className="space-y-5">
