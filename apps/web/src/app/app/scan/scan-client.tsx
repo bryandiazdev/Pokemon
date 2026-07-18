@@ -40,6 +40,7 @@ export function ScanClient() {
   );
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [visionOff, setVisionOff] = useState(false);
+  const [serverFault, setServerFault] = useState(false);
   const [confirmed, setConfirmed] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -60,6 +61,7 @@ export function ScanClient() {
     const resBody = await res.json();
     if (!resBody.success) {
       setMessage(resBody.error.message);
+      setServerFault(resBody.error.code === 'internal_error');
       setPhase('rejected');
       return;
     }
@@ -119,6 +121,7 @@ export function ScanClient() {
       });
     } catch {
       setMessage('Could not analyze that photo. Try another one.');
+      setServerFault(false);
       setPhase('rejected');
     }
   }
@@ -172,7 +175,9 @@ export function ScanClient() {
       <Card className="space-y-3">
         <div className="flex items-center gap-2 text-warning">
           <AlertTriangle size={18} />
-          <span className="font-medium">Let’s retake that</span>
+          <span className="font-medium">
+            {serverFault ? 'Scanning is temporarily unavailable' : 'Let’s retake that'}
+          </span>
         </div>
         <p className="text-sm text-muted">{message}</p>
         <div className="flex gap-2">

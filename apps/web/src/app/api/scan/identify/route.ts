@@ -98,9 +98,14 @@ export const POST = withErrorHandling(async (req: Request) => {
     return jsonError('usage_limit_reached', gate.message);
   }
 
+  const visionAvailable = hasOpenAiScan();
+
   // Server re-validates image quality; poor images are rejected with guidance.
+  // Only when vision is unavailable: the heuristics run on flat-background
+  // phone photos with real false-positive rates, and a vision model judges
+  // actual legibility far better than a Laplacian variance ever will.
   const q = parsed.value.quality;
-  if (q) {
+  if (q && !visionAvailable) {
     const issues: string[] = [];
     if (q.blur !== undefined && q.blur > 0.6)
       issues.push('The image looks blurry — hold steady and refocus.');
@@ -123,10 +128,10 @@ export const POST = withErrorHandling(async (req: Request) => {
   const ocr: { name?: string; number?: string; setName?: string; rawText?: string } = {
     ...parsed.value.ocr,
   };
-  const visionAvailable = hasOpenAiScan();
   let identifiedBy: 'device-ocr' | 'vision' = 'device-ocr';
   let visionLanguage: string | undefined;
   let setTotal: string | null = null;
+  let visionError: string | null = null;
 
   if (visionAvailable && isImageDataUrl(parsed.value.imageRef)) {
     try {
@@ -154,13 +159,19 @@ export const POST = withErrorHandling(async (req: Request) => {
         identifiedBy = 'vision';
       }
     } catch (err) {
-      // Fall back to on-device OCR hints rather than failing the scan.
+      // Fall back to on-device OCR hints, but REMEMBER why vision failed —
+      // blaming the user's photo for a server-side failure sends them into a
+      // hopeless retake loop.
+      visionError = err instanceof Error ? err.message : 'Vision analysis failed.';
       // eslint-disable-next-line no-console
       console.error('[scan/identify] vision identification failed:', err);
     }
   }
 
   if (!ocr.name && !ocr.number) {
+    if (visionError) {
+      return jsonError('internal_error', `Card identification is unavailable: ${visionError}`);
+    }
     return jsonError(
       'image_rejected',
       visionAvailable

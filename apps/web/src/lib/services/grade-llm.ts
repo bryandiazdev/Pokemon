@@ -167,7 +167,12 @@ export async function analyzeGradeWithOpenAI(
     console.error('[grade-llm] OpenAI error', res.status, detail.slice(0, 500));
     if (res.status === 401)
       throw new Error('OpenAI API key was rejected (401). Check OPENAI_API_KEY.');
-    if (res.status === 429) throw new Error('OpenAI rate limit hit. Try again in a moment.');
+    if (res.status === 429)
+      throw new Error(
+        detail.includes('insufficient_quota')
+          ? 'The OpenAI account is out of credits (insufficient_quota). Add credits in the OpenAI billing dashboard.'
+          : 'OpenAI rate limit hit. Try again in a moment.',
+      );
     throw new Error(`OpenAI request failed (${res.status}).`);
   }
 

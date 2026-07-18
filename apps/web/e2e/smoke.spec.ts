@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type FileChooser } from '@playwright/test';
 
 /** Demo-mode smoke tests covering the core navigable flows. */
 
@@ -109,7 +109,7 @@ test('quick scan identifies an uploaded card photo end-to-end', async ({ page })
 
   // The button is server-rendered before React attaches its onClick; retry
   // until hydration makes the click actually open the chooser.
-  let chooser: Awaited<ReturnType<typeof page.waitForEvent<'filechooser'>>> | null = null;
+  let chooser: FileChooser | null = null;
   for (let attempt = 0; attempt < 5 && !chooser; attempt++) {
     try {
       [chooser] = await Promise.all([
