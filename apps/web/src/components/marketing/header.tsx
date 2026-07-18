@@ -6,6 +6,7 @@ import { Menu, X } from 'lucide-react';
 import { cn } from '@psr/ui';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Wordmark } from '@/components/brand';
+import { AuthCta } from '@/components/marketing/auth-cta';
 
 const NAV_LINKS = [
   { href: '/features', label: 'Features' },
@@ -39,18 +40,7 @@ export function MarketingHeader() {
 
         <div className="flex items-center gap-1.5">
           <ThemeToggle />
-          <Link
-            href="/sign-in"
-            className="hidden min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-elevated hover:text-content sm:inline-flex"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/sign-up"
-            className="hidden min-h-10 items-center rounded-lg bg-prism px-4 text-sm font-semibold text-accent-ink transition-all hover:brightness-110 sm:inline-flex"
-          >
-            Create account
-          </Link>
+          <AuthCta variant="desktop" />
 
           <button
             type="button"
@@ -85,20 +75,7 @@ export function MarketingHeader() {
               </Link>
             ))}
             <div className="my-2 h-px bg-border" />
-            <Link
-              href="/sign-in"
-              onClick={() => setOpen(false)}
-              className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-content hover:bg-surface-elevated"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/sign-up"
-              onClick={() => setOpen(false)}
-              className="flex min-h-11 items-center justify-center rounded-lg bg-prism px-3 text-sm font-semibold text-accent-ink"
-            >
-              Create account
-            </Link>
+            <AuthCta variant="mobile" onNavigate={() => setOpen(false)} />
           </nav>
         </div>
       )}

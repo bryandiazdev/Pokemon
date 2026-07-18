@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,20 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
   const [loading, setLoading] = useState(false);
   const supabase = getBrowserSupabase();
   const isSignUp = mode === 'sign-up';
+
+  // Already signed in? There is nothing to do here — go straight to the app
+  // instead of making the user authenticate again.
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled && data.session) router.replace('/app');
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

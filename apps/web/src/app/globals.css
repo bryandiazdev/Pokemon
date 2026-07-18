@@ -244,6 +244,17 @@ body {
     @apply block w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm text-content outline-none transition-colors focus-visible:border-accent;
     min-height: 44px;
   }
+
+  /* iOS zooms the page when a focused input's font is under 16px. Keep every
+     form control at ≥16px on touch-sized screens so focus never zooms —
+     the viewport lock is the backstop, this removes the trigger itself. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
   .psr-input::placeholder {
     color: rgb(var(--faint));
   }

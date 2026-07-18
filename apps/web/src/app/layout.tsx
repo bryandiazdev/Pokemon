@@ -50,6 +50,11 @@ export const viewport: Viewport = {
   themeColor: '#0a0b12',
   width: 'device-width',
   initialScale: 1,
+  // App-like: lock the page scale so focusing inputs can't zoom the viewport
+  // (paired with ≥16px input font on mobile, which removes iOS's reason to
+  // zoom in the first place).
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
 };
 
