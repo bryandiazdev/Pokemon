@@ -101,6 +101,15 @@ export const envSchema = z.object({
    */
   OPENAI_SCAN_MODEL: z.string().default('gpt-4o'),
 
+  /**
+   * Anthropic — optional. When set, Claude is the PREFERRED vision provider
+   * for quick-scan identification and Grade Potential (OpenAI becomes the
+   * fallback). Get a key at https://platform.claude.com
+   */
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_SCAN_MODEL: z.string().default('claude-opus-4-8'),
+  ANTHROPIC_GRADE_MODEL: z.string().default('claude-opus-4-8'),
+
   // Provider selectors.
   CATALOG_PROVIDER: providerSelector,
   RECOGNITION_PROVIDER: providerSelector,

@@ -1,14 +1,18 @@
 import 'server-only';
 import { z } from 'zod';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { LimitingFinding, SubScores } from '@psr/grading-rules';
 import { env } from '../env';
+import { getAnthropic, rethrowAnthropic, toAllowedMedia } from './anthropic';
 
 /**
- * OpenAI vision-backed grade analysis. Sends uploaded card photos to a
- * vision-capable chat model and parses structured condition scores.
+ * Vision-backed grade analysis. Sends uploaded card photos to a
+ * vision-capable model and parses structured condition scores.
  *
- * This is still an *estimate* — never a professional grade. The model is asked
- * to be conservative and honest about uncertainty / image limits.
+ * Providers: Anthropic (Claude, preferred when ANTHROPIC_API_KEY is set) and
+ * OpenAI (fallback). This is still an *estimate* — never a professional
+ * grade. The model is asked to be conservative and honest about
+ * uncertainty / image limits.
  */
 
 export interface LlmGradeAnalysis {
@@ -18,6 +22,7 @@ export interface LlmGradeAnalysis {
   suggestedRecaptures: string[];
   summary: string;
   cardIdentification: string | null;
+  provider: 'anthropic' | 'openai';
   model: string;
 }
 
@@ -44,6 +49,55 @@ const llmJsonSchema = z.object({
   summary: z.string().min(1),
   cardIdentification: z.string().nullable().optional(),
 });
+
+// Hand-written JSON schema for Claude structured outputs (the SDK's zod
+// helper requires zod v4; this app is on zod 3). Range constraints aren't
+// supported by structured outputs — the zod parse enforces them after.
+const scoreNumber = { type: 'number' } as const;
+const GRADE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'scores',
+    'findings',
+    'limitingDefects',
+    'suggestedRecaptures',
+    'summary',
+    'cardIdentification',
+  ],
+  properties: {
+    scores: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['centering', 'corner', 'edge', 'surface', 'structural', 'imageQuality'],
+      properties: {
+        centering: scoreNumber,
+        corner: scoreNumber,
+        edge: scoreNumber,
+        surface: scoreNumber,
+        structural: scoreNumber,
+        imageQuality: scoreNumber,
+      },
+    },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['key', 'severity', 'title'],
+        properties: {
+          key: { type: 'string' },
+          severity: { type: 'string', enum: ['none', 'minor', 'moderate', 'severe'] },
+          title: { type: 'string' },
+        },
+      },
+    },
+    limitingDefects: { type: 'array', items: { type: 'string' } },
+    suggestedRecaptures: { type: 'array', items: { type: 'string' } },
+    summary: { type: 'string' },
+    cardIdentification: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+  },
+} as const;
 
 const SYSTEM_PROMPT = `You are an expert Pokémon TCG card condition analyst assisting collectors before they submit to PSA/BGS/CGC.
 
@@ -93,32 +147,131 @@ function extractJson(text: string): unknown {
   return JSON.parse(raw);
 }
 
-export function hasOpenAiGrade(): boolean {
-  return Boolean(env.OPENAI_API_KEY);
+/** Which vision provider will serve grade analysis, if any. */
+export function visionGradeProvider(): 'anthropic' | 'openai' | null {
+  if (env.ANTHROPIC_API_KEY) return 'anthropic';
+  if (env.OPENAI_API_KEY) return 'openai';
+  return null;
+}
+
+export function hasVisionGrade(): boolean {
+  return visionGradeProvider() !== null;
+}
+
+/** Cap images to keep latency/cost reasonable (required 3 + up to 2 extras). */
+function limitCaptures(files: File[], captureTypes: string[]) {
+  const limit = Math.min(files.length, 5);
+  return files.slice(0, limit).map((f, i) => ({
+    file: f,
+    type: captureTypes[i] ?? `capture_${i}`,
+  }));
+}
+
+/**
+ * Analyze uploaded grade captures with the configured vision provider.
+ * Throws on API / parse failures so the caller can fall back.
+ */
+export async function analyzeGradeWithVision(
+  files: File[],
+  captureTypes: string[],
+): Promise<LlmGradeAnalysis> {
+  const provider = visionGradeProvider();
+  if (!provider) throw new Error('No vision provider configured (set ANTHROPIC_API_KEY).');
+  if (files.length === 0) {
+    throw new Error('No images provided for LLM analysis');
+  }
+  return provider === 'anthropic'
+    ? analyzeGradeWithClaude(files, captureTypes)
+    : analyzeGradeWithOpenAI(files, captureTypes);
+}
+
+function normalizeAnalysis(
+  data: z.infer<typeof llmJsonSchema>,
+  provider: 'anthropic' | 'openai',
+  model: string,
+): LlmGradeAnalysis {
+  return {
+    scores: {
+      centering: Math.round(data.scores.centering),
+      corner: Math.round(data.scores.corner),
+      edge: Math.round(data.scores.edge),
+      surface: Math.round(data.scores.surface),
+      structural: Math.round(data.scores.structural),
+      imageQuality: Math.round(data.scores.imageQuality),
+    },
+    findings: data.findings.filter((f) => f.severity !== 'none'),
+    limitingDefects: data.limitingDefects,
+    suggestedRecaptures: data.suggestedRecaptures,
+    summary: data.summary.trim(),
+    cardIdentification: data.cardIdentification?.trim() || null,
+    provider,
+    model,
+  };
+}
+
+async function analyzeGradeWithClaude(
+  files: File[],
+  captureTypes: string[],
+): Promise<LlmGradeAnalysis> {
+  const model = env.ANTHROPIC_GRADE_MODEL || 'claude-opus-4-8';
+  const client = getAnthropic();
+  const pairs = limitCaptures(files, captureTypes);
+
+  const content: Anthropic.ContentBlockParam[] = [
+    { type: 'text', text: userPrompt(pairs.map((p) => p.type)) },
+  ];
+  for (const p of pairs) {
+    const buf = Buffer.from(await p.file.arrayBuffer());
+    content.push({ type: 'text', text: `Photo: ${p.type}` });
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: toAllowedMedia(p.file.type),
+        data: buf.toString('base64'),
+      },
+    });
+  }
+
+  const response = await client.messages
+    .create({
+      model,
+      max_tokens: 2000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content }],
+      output_config: { format: { type: 'json_schema', schema: GRADE_JSON_SCHEMA } },
+    })
+    .catch(rethrowAnthropic);
+
+  const text = response.content.find(
+    (b): b is Anthropic.TextBlock => b.type === 'text',
+  )?.text;
+  if (response.stop_reason === 'refusal' || !text) {
+    throw new Error('Claude returned no analysis for these photos.');
+  }
+  const parsed = llmJsonSchema.safeParse(JSON.parse(text));
+  if (!parsed.success) {
+    // eslint-disable-next-line no-console
+    console.error('[grade-llm] Claude schema mismatch', parsed.error.flatten());
+    throw new Error('Claude returned an unexpected analysis shape.');
+  }
+  return normalizeAnalysis(parsed.data, 'anthropic', model);
 }
 
 /**
  * Analyze uploaded grade captures with OpenAI vision.
  * Throws on API / parse failures so the caller can fall back.
  */
-export async function analyzeGradeWithOpenAI(
+async function analyzeGradeWithOpenAI(
   files: File[],
   captureTypes: string[],
 ): Promise<LlmGradeAnalysis> {
   if (!env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not configured');
   }
-  if (files.length === 0) {
-    throw new Error('No images provided for LLM analysis');
-  }
 
   const model = env.OPENAI_GRADE_MODEL || 'gpt-4o';
-  // Cap images to keep latency/cost reasonable (required 3 + up to 2 extras).
-  const limit = Math.min(files.length, 5);
-  const pairs = files.slice(0, limit).map((f, i) => ({
-    file: f,
-    type: captureTypes[i] ?? `capture_${i}`,
-  }));
+  const pairs = limitCaptures(files, captureTypes);
 
   const dataUrls = await Promise.all(pairs.map((p) => fileToDataUrl(p.file)));
 
@@ -189,23 +342,7 @@ export async function analyzeGradeWithOpenAI(
     throw new Error('OpenAI returned an unexpected analysis shape.');
   }
 
-  const data = parsed.data;
-  return {
-    scores: {
-      centering: Math.round(data.scores.centering),
-      corner: Math.round(data.scores.corner),
-      edge: Math.round(data.scores.edge),
-      surface: Math.round(data.scores.surface),
-      structural: Math.round(data.scores.structural),
-      imageQuality: Math.round(data.scores.imageQuality),
-    },
-    findings: data.findings.filter((f) => f.severity !== 'none'),
-    limitingDefects: data.limitingDefects,
-    suggestedRecaptures: data.suggestedRecaptures,
-    summary: data.summary.trim(),
-    cardIdentification: data.cardIdentification?.trim() || null,
-    model,
-  };
+  return normalizeAnalysis(parsed.data, 'openai', model);
 }
 
 /** Average two score sets (e.g. CV + LLM) when both analyzers ran. */

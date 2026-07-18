@@ -472,7 +472,7 @@ function GradeReport({
         {(report.captures?.length ?? 0) > 0
           ? `${report.captures!.length} uploaded capture${report.captures!.length === 1 ? '' : 's'}`
           : 'uploads'}
-        {live ? '' : ' · demo scoring (set OPENAI_API_KEY for live vision)'}
+        {live ? '' : ' · demo scoring (set ANTHROPIC_API_KEY for live vision)'}
       </div>
       <GradeDisclaimer />
     </div>

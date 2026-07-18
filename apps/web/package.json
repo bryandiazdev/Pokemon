@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@psr/config": "workspace:*",
     "@psr/grading-rules": "workspace:*",
     "@psr/providers": "workspace:*",

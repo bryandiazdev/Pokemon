@@ -4,7 +4,7 @@ import { jsonOk, jsonError, withErrorHandling, parse } from '@/lib/api';
 import { getRegistry } from '@/lib/providers';
 import { matchSets } from '@/lib/catalog-match';
 import { getEntitlementContext, checkQuickScan } from '@/lib/services/entitlements';
-import { hasOpenAiScan, identifyCardWithOpenAI, type ScanImage } from '@/lib/services/scan-llm';
+import { hasVisionScan, identifyCardWithVision, type ScanImage } from '@/lib/services/scan-llm';
 
 const metric = z.number().min(0).max(1).optional();
 
@@ -98,7 +98,7 @@ export const POST = withErrorHandling(async (req: Request) => {
     return jsonError('usage_limit_reached', gate.message);
   }
 
-  const visionAvailable = hasOpenAiScan();
+  const visionAvailable = hasVisionScan();
 
   // Server re-validates image quality; poor images are rejected with guidance.
   // Only when vision is unavailable: the heuristics run on flat-background
@@ -142,7 +142,7 @@ export const POST = withErrorHandling(async (req: Request) => {
           dataUrl: parsed.value.numberCrop,
         });
       }
-      const vision = await identifyCardWithOpenAI(images);
+      const vision = await identifyCardWithVision(images);
       if (vision === null) {
         return jsonError(
           'image_rejected',
@@ -176,7 +176,7 @@ export const POST = withErrorHandling(async (req: Request) => {
       'image_rejected',
       visionAvailable
         ? 'Could not read the card name or number. Retake with the card flat, filling the frame, in bright indirect light.'
-        : 'Could not read the card with on-device OCR, and server vision is not configured (set OPENAI_API_KEY for reliable scans). Retake with the card flat and well lit, or search manually.',
+        : 'Could not read the card with on-device OCR, and server vision is not configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY for reliable scans). Retake with the card flat and well lit, or search manually.',
     );
   }
 

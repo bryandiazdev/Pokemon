@@ -11,7 +11,7 @@ import {
 import type { SubmissionRecommendation } from '@psr/types';
 import { getEntitlementContext, checkGradeScan } from '@/lib/services/entitlements';
 import { env } from '@/lib/env';
-import { analyzeGradeWithOpenAI, hasOpenAiGrade } from '@/lib/services/grade-llm';
+import { analyzeGradeWithVision, hasVisionGrade, visionGradeProvider } from '@/lib/services/grade-llm';
 
 /**
  * Grade-potential analysis.
@@ -226,12 +226,12 @@ export const POST = withErrorHandling(async (req: Request) => {
       return jsonError('validation_error', `Missing required captures: ${missing.join(', ')}.`);
     }
 
-    // OpenAI is the simplest hosted vision path: the browser uploads to this
-    // route and only the server reads OPENAI_API_KEY. The secret is never sent
-    // to the client or embedded in the Next.js bundle.
-    if (hasOpenAiGrade()) {
+    // Hosted vision (Claude preferred, OpenAI fallback): the browser uploads
+    // to this route and only the server reads the API keys. Secrets are never
+    // sent to the client or embedded in the Next.js bundle.
+    if (hasVisionGrade()) {
       try {
-        const analysis = await analyzeGradeWithOpenAI(files, captureTypes);
+        const analysis = await analyzeGradeWithVision(files, captureTypes);
         const estimate = evaluateGrade(analysis.scores, analysis.findings);
         return jsonReport({
           scores: analysis.scores,
@@ -245,7 +245,7 @@ export const POST = withErrorHandling(async (req: Request) => {
               ...new Set([...estimate.suggestedRecaptures, ...analysis.suggestedRecaptures]),
             ],
           },
-          modelVersion: `openai:${analysis.model}`,
+          modelVersion: `${analysis.provider}:${analysis.model}`,
           remaining: gate.remaining,
           captures: captureTypes,
           analysisSummary: analysis.summary,
@@ -255,8 +255,8 @@ export const POST = withErrorHandling(async (req: Request) => {
         // A configured integration should fail visibly instead of silently
         // returning sample grades that look like real analysis.
         // eslint-disable-next-line no-console
-        console.error('[grade/analyze] OpenAI analysis failed:', err);
-        const message = err instanceof Error ? err.message : 'OpenAI vision analysis failed.';
+        console.error('[grade/analyze] vision analysis failed:', err);
+        const message = err instanceof Error ? err.message : 'Vision analysis failed.';
         return jsonError('internal_error', message);
       }
     }
@@ -316,11 +316,12 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   const scores = parsed.value.scores ?? SAMPLE_SCORES;
   const findings = (parsed.value.findings ?? []) as LimitingFinding[];
+  const provider = visionGradeProvider();
   return jsonReport({
     scores,
     findings,
-    modelVersion: hasOpenAiGrade()
-      ? `openai:${env.OPENAI_GRADE_MODEL}`
+    modelVersion: provider
+      ? `${provider}:${provider === 'anthropic' ? env.ANTHROPIC_GRADE_MODEL : env.OPENAI_GRADE_MODEL}`
       : env.VISION_SERVICE_URL
         ? 'vision-live'
         : 'cv-heuristic-0.1.0-demo',

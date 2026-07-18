@@ -253,8 +253,8 @@ export function ScanClient() {
             )}
             {visionOff && (
               <p className="text-xs text-warning">
-                Identified with on-device OCR only — server vision is off. Set OPENAI_API_KEY on the
-                server for far more reliable scans.
+                Identified with on-device OCR only — server vision is off. Set ANTHROPIC_API_KEY (or
+                OPENAI_API_KEY) on the server for far more reliable scans.
               </p>
             )}
             {visionNote && <p className="text-xs text-warning">{visionNote}</p>}
