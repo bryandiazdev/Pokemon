@@ -40,6 +40,7 @@ export function ScanClient() {
   );
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [visionOff, setVisionOff] = useState(false);
+  const [visionNote, setVisionNote] = useState<string | null>(null);
   const [serverFault, setServerFault] = useState(false);
   const [confirmed, setConfirmed] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
@@ -67,9 +68,11 @@ export function ScanClient() {
     }
     if (!resBody.data.candidates?.length) {
       const read = resBody.data.readText;
+      const note = resBody.data.visionNote ? ` ${resBody.data.visionNote}` : '';
       setMessage(
-        `No catalog match${read?.name ? ` for "${read.name}${read.number ? ` #${read.number}` : ''}"` : ''}. Try a sharper, well-lit photo or search manually.`,
+        `No catalog match${read?.name ? ` for "${read.name}${read.number ? ` #${read.number}` : ''}"` : ''}. Try a sharper, well-lit photo or search manually.${note}`,
       );
+      setServerFault(Boolean(resBody.data.visionNote));
       setPhase('rejected');
       return;
     }
@@ -77,6 +80,7 @@ export function ScanClient() {
     setRemaining(resBody.data.remaining);
     setReadText(resBody.data.readText ?? null);
     setVisionOff(resBody.data.visionAvailable === false);
+    setVisionNote(resBody.data.visionNote ?? null);
     setPhase('confirm');
   }
 
@@ -253,6 +257,7 @@ export function ScanClient() {
                 server for far more reliable scans.
               </p>
             )}
+            {visionNote && <p className="text-xs text-warning">{visionNote}</p>}
           </div>
         </div>
         {message && <p className="text-xs text-warning">{message}</p>}

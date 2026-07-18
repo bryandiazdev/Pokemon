@@ -201,6 +201,10 @@ export const POST = withErrorHandling(async (req: Request) => {
     remaining: gate.remaining,
     identifiedBy,
     visionAvailable,
+    // Vision failed but device OCR produced *something* — flag that the
+    // results rest on weak hints so the UI can warn instead of feigning
+    // confidence over garbage.
+    visionNote: visionError ? `Server vision failed: ${visionError}` : null,
     readText: { name: ocr.name ?? null, number: ocr.number ?? null },
   });
 });

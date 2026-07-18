@@ -109,6 +109,22 @@ describe('catalog-ocr recognition', () => {
     expect(result.candidates).toHaveLength(1);
   });
 
+  it('returns no candidates instead of unrelated catalog noise on a number-only query', async () => {
+    // A number-only search can only page through the raw catalog — cards
+    // that match neither name nor number must not surface as candidates.
+    const unrelated = [
+      card({ externalId: 'exu-1', name: 'Unown', number: '!' }),
+      card({ externalId: 'exu-2', name: 'Unown', number: '?' }),
+    ];
+    const provider = createCatalogOcrRecognition(catalogWith(unrelated));
+    const result = await provider.identifyCard({
+      imageRef: 'data:image/jpeg;base64,x',
+      ocr: { number: '35' },
+    });
+    expect(result.candidates).toHaveLength(0);
+    expect(result.requiresConfirmation).toBe(true);
+  });
+
   it('retries with the longest name word when the full name finds nothing', async () => {
     const calls: string[] = [];
     const catalog: CardCatalogProvider = {

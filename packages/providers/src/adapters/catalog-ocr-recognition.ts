@@ -158,8 +158,17 @@ export function createCatalogOcrRecognition(
         }));
       }
 
+      // Only keep candidates with positive identifying evidence. A number-only
+      // query against a broad catalog page can return completely unrelated
+      // cards — showing those at ~0% match is worse than showing nothing.
       const scored = cards
         .map((card) => scoreCandidate(card, ocr, input.language, input.setExternalId))
+        .filter(
+          (s) =>
+            s.evidence.numberMatch === true ||
+            s.evidence.setMatch === true ||
+            (typeof s.evidence.nameSimilarity === 'number' && s.evidence.nameSimilarity >= 0.35),
+        )
         .sort((a, b) => b.score - a.score)
         .slice(0, 4);
 
