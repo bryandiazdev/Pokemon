@@ -72,8 +72,10 @@ export default async function DashboardPage() {
         />
       </Card>
 
+      {/* min-w-0 on grid children: a long card name must shrink and truncate,
+          not stretch the whole grid past the viewport. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
+        <Card className="min-w-0 lg:col-span-1">
           <CardTitle>Raw vs graded</CardTitle>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -87,7 +89,7 @@ export default async function DashboardPage() {
           </dl>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
             <CardTitle>Holdings</CardTitle>
             <Link href="/app/collection" className="text-xs text-accent hover:underline">
@@ -98,14 +100,20 @@ export default async function DashboardPage() {
             {summary.items.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <Link href={`/cards/${item.cardExternalId}`} className="truncate font-medium hover:text-accent">
+                  {/* block: truncate has no effect on inline elements — an
+                      inline link with a long name widens the page instead of
+                      ellipsizing. */}
+                  <Link
+                    href={`/cards/${item.cardExternalId}`}
+                    className="block truncate font-medium hover:text-accent"
+                  >
                     {item.name}
                   </Link>
                   <div className="text-xs text-muted">
                     {item.gradeLabel} · ×{item.quantity}
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <div className="tabular-nums">{fmtMoney(item.lineValue)}</div>
                   <div
                     className={`text-xs tabular-nums ${item.gain.minor >= 0 ? 'text-positive' : 'text-negative'}`}

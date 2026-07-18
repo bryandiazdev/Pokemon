@@ -33,7 +33,9 @@ export function Stat({
         />
       )}
       <div className="label-strip">{label}</div>
-      <div className="mt-2 font-display text-[1.7rem] font-semibold leading-none tabular text-content">
+      {/* clamp(): scale the value down on narrow half-width tiles so five-figure
+          portfolios render whole instead of clipping at the tile edge. */}
+      <div className="mt-2 font-display text-[clamp(1.05rem,5.5vw,1.7rem)] font-semibold leading-none tabular text-content">
         {value}
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs">

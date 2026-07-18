@@ -55,9 +55,11 @@ export default async function CollectionPage() {
               >
                 <Link
                   href={`/cards/${item.cardExternalId}`}
-                  className="flex aspect-[2.5/3.5] max-h-72 items-center justify-center bg-bg-deep/60 p-2"
+                  className="flex aspect-[245/337] max-h-72 items-center justify-center bg-bg-deep/60 p-1.5"
                 >
                   {item.imageUrl ? (
+                    // aspect-[245/337] above is the true TCGdex card ratio — the
+                    // frame matches the artwork, so the image fills it cleanly.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.imageUrl}
