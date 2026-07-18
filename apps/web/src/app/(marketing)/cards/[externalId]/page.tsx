@@ -57,7 +57,16 @@ export default async function CardPage({ params }: Params) {
     getPopulation(externalId, 'psa').catch(() => null),
   ]);
 
-  const rawByCondition = new Map(pricing.raw.map((p) => [p.condition, p]));
+  // Everything is USD; prefer native TCGplayer USD prices over Cardmarket
+  // values that were FX-converted from EUR.
+  const rawByCondition = new Map<string | undefined, (typeof pricing.raw)[number]>();
+  for (const p of pricing.raw) {
+    const existing = rawByCondition.get(p.condition);
+    if (!existing || (existing.fxConverted && !p.fxConverted)) {
+      rawByCondition.set(p.condition, p);
+    }
+  }
+  const anyConverted = [...rawByCondition.values()].some((p) => p.fxConverted);
   const nm = rawByCondition.get('near_mint');
   const psa10 = pricing.graded.find((g) => g.gradingCompany === 'psa' && g.grade === '10');
   const multiplier = nm && psa10 ? (psa10.valueMinor / nm.valueMinor).toFixed(1) : null;
@@ -144,12 +153,17 @@ export default async function CardPage({ params }: Params) {
                   >
                     <div className="label-strip">{CONDITION_LABEL[cond]}</div>
                     <div className="mt-1 font-mono text-base font-medium tabular text-content">
-                      {p ? fmtMinor(p.valueMinor, p.currency) : '—'}
+                      {p ? `${p.fxConverted ? '≈' : ''}${fmtMinor(p.valueMinor, p.currency)}` : '—'}
                     </div>
                   </div>
                 );
               })}
             </div>
+            {anyConverted && (
+              <p className="mt-3 text-xs text-muted">
+                ≈ Converted from Cardmarket EUR at the current ECB reference rate.
+              </p>
+            )}
           </Card>
 
           {multiplier && (

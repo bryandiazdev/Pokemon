@@ -1,6 +1,7 @@
 import 'server-only';
 import { DEMO_COLLECTION_ITEMS } from '@psr/testing';
 import { getRegistry } from '../providers';
+import { toUsdPrices } from './fx';
 import { getCurrentUser } from '../auth';
 import { listCollectionItems } from './collection';
 import {
@@ -80,17 +81,20 @@ async function unitValueFor(item: ValuationInput): Promise<Money> {
       const match = graded.find((g) => g.grade === item.grade) ?? graded[0];
       return money(match?.valueMinor ?? 0, CURRENCY);
     }
-    const raw = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
+    const rawNative = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
       a.getCurrentRawPrices({ cardExternalId: item.cardExternalId! }),
     );
-    // Prefer a USD (TCGplayer) market price for the requested condition.
-    const usd = raw.filter((r) => r.currency === CURRENCY);
-    const pool = usd.length > 0 ? usd : raw;
+    // USD-only app: convert any EUR (Cardmarket) entries before selection so
+    // mixed-currency money math can never throw here again.
+    const raw = await toUsdPrices(rawNative);
+    // Prefer a native-USD (TCGplayer) market price for the requested condition.
+    const native = raw.filter((r) => !r.fxConverted);
+    const pool = native.length > 0 ? native : raw;
     const match =
       pool.find((r) => r.condition === (item.rawCondition ?? 'near_mint')) ??
       pool.find((r) => r.condition === 'near_mint') ??
       pool[0];
-    return money(match?.valueMinor ?? 0, match?.currency ?? CURRENCY);
+    return money(match?.valueMinor ?? 0, CURRENCY);
   } catch {
     // Provider hiccup: value at zero rather than failing the whole dashboard.
     return money(0, CURRENCY);
@@ -100,22 +104,49 @@ async function unitValueFor(item: ValuationInput): Promise<Money> {
 async function valueItems(inputs: ValuationInput[]): Promise<ValuedItem[]> {
   const valued: ValuedItem[] = [];
   for (const item of inputs) {
-    const unit = await unitValueFor(item);
-    const line = mulMoney(unit, item.quantity);
-    const cost = money(item.purchasePriceMinor * item.quantity, CURRENCY);
-    valued.push({
-      id: item.id,
-      cardExternalId: item.cardExternalId ?? '',
-      name: item.name,
-      quantity: item.quantity,
-      ownershipType: item.ownershipType,
-      gradeLabel: item.gradeLabel,
-      unitValue: unit,
-      lineValue: line,
-      costBasis: cost,
-      gain: subMoney(line, cost),
-      gainPct: pctChange(cost, line),
-    });
+    // One bad item must never take down the whole collection page — value it
+    // at zero and keep going.
+    try {
+      const unit = await unitValueFor(item);
+      const line = mulMoney(unit, item.quantity);
+      const cost = money(item.purchasePriceMinor * item.quantity, CURRENCY);
+      valued.push({
+        id: item.id,
+        cardExternalId: item.cardExternalId ?? '',
+        name: item.name,
+        quantity: item.quantity,
+        ownershipType: item.ownershipType,
+        gradeLabel: item.gradeLabel,
+        unitValue: unit,
+        lineValue: line,
+        costBasis: cost,
+        gain: subMoney(line, cost),
+        gainPct: pctChange(cost, line),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[portfolio] failed to value item ${item.id}:`, err);
+      const zero = money(0, CURRENCY);
+      const cost = money(
+        Number.isInteger(item.purchasePriceMinor * item.quantity)
+          ? item.purchasePriceMinor * item.quantity
+          : 0,
+        CURRENCY,
+      );
+      valued.push({
+        id: item.id,
+        cardExternalId: item.cardExternalId ?? '',
+        name: item.name,
+        quantity: item.quantity,
+        ownershipType: item.ownershipType,
+        gradeLabel: item.gradeLabel,
+        unitValue: zero,
+        lineValue: zero,
+        costBasis: cost,
+        gain: subMoney(zero, cost),
+        gainPct: null,
+      });
+    }
   }
   return valued;
 }

@@ -60,6 +60,8 @@ export interface NormalizedPrice {
   recordedForDate: string; // ISO date
   providerUpdatedAt?: string;
   freshness: DataFreshness;
+  /** Set when the price was converted from another currency (honest labeling). */
+  fxConverted?: { from: string; rate: number };
 }
 
 export interface NormalizedGradedPrice extends NormalizedPrice {

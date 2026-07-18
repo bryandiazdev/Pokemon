@@ -1,5 +1,6 @@
 import 'server-only';
 import { getRegistry } from '../providers';
+import { toUsdPrices, toUsdPoints } from './fx';
 import type {
   NormalizedCard,
   NormalizedSet,
@@ -123,7 +124,9 @@ export async function getCardPricing(cardExternalId: string): Promise<CardPricin
       a.getCurrentGradedPrices({ cardExternalId }),
     ),
   ]);
-  return { raw, graded };
+  // The app is USD-only: Cardmarket (EUR) values are converted at the ECB
+  // reference rate and marked `fxConverted` for honest labeling.
+  return { raw: await toUsdPrices(raw), graded: await toUsdPrices(graded) };
 }
 
 export async function getRawHistory(
@@ -132,13 +135,14 @@ export async function getRawHistory(
 ): Promise<NormalizedPricePoint[]> {
   const to = new Date();
   const from = new Date(to.getTime() - days * 86_400_000);
-  return getRegistry().call('rawPricing', 'getRawPriceHistory', (a) =>
+  const points = await getRegistry().call('rawPricing', 'getRawPriceHistory', (a) =>
     a.getRawPriceHistory({
       cardExternalId,
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
     }),
   );
+  return toUsdPoints(points);
 }
 
 export async function getPopulation(
