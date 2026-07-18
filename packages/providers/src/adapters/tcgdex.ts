@@ -222,8 +222,11 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
         return { cards, nextCursor };
       }
 
-      // Split a trailing/na collector number out of the query ("Charizard 4", "199/165").
-      const numberMatch = query.match(/(\d+[a-z]?)(?:\/\d+)?\s*$/i);
+      // Split a trailing collector number out of the query — plain ("Charizard 4",
+      // "199/165") or letter-prefixed ("Meloetta ex RC25", "TG13/TG30"). The \b +
+      // 0-4 letter prefix cannot eat a name word ("Meloetta ex" alone stays intact
+      // because "ex" has no digits and long words fail the boundary).
+      const numberMatch = query.match(/\b([A-Za-z]{0,4}\d{1,4}[a-z]?)(?:\/[A-Za-z]{0,4}\d{1,4})?\s*$/i);
       const number = numberMatch?.[1];
       const nameOnly = number ? query.slice(0, query.length - numberMatch![0].length).trim() : query;
 
@@ -245,9 +248,11 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
 
       let normalized = cards.map((c) => normalizeBriefCard(c, language, input.setExternalId));
       // Client-side number filter when the query carried a collector number.
+      // Zero-strip the digit part so "RC05"/"RC5" and "058"/"58" compare equal.
       if (number) {
-        const wanted = number.toLowerCase();
-        const filtered = normalized.filter((c) => (c.number ?? '').toLowerCase() === wanted);
+        const canon = (n: string) => n.toLowerCase().replace(/^([a-z]*)0+(?=\d)/, '$1');
+        const wanted = canon(number);
+        const filtered = normalized.filter((c) => canon(c.number ?? '') === wanted);
         if (filtered.length > 0) normalized = filtered;
       }
       const page = Number(input.cursor ?? '1');

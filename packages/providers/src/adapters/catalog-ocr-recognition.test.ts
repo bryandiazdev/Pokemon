@@ -125,6 +125,48 @@ describe('catalog-ocr recognition', () => {
     expect(result.requiresConfirmation).toBe(true);
   });
 
+  it('recovers dash-named cards with lettered numbers ("Meloetta ex" → Meloetta-EX RC25)', async () => {
+    const meloetta = card({
+      externalId: 'g1-RC25',
+      setExternalId: 'g1',
+      name: 'Meloetta-EX',
+      number: 'RC25',
+      printedNumber: 'RC25/RC32',
+    });
+    const calls: string[] = [];
+    const catalog: CardCatalogProvider = {
+      name: 'test-catalog',
+      async searchCards(input) {
+        calls.push(input.query);
+        // The catalog's name filter can't match "Meloetta ex" against
+        // "Meloetta-EX" (dash), so the full-name query returns nothing;
+        // the bare-name fallback succeeds.
+        return input.query.startsWith('Meloetta ex')
+          ? { cards: [], nextCursor: null }
+          : { cards: [meloetta], nextCursor: null };
+      },
+      async getCard() {
+        return meloetta;
+      },
+      async getSet() {
+        throw new Error('not used');
+      },
+      async listSets() {
+        return [];
+      },
+    };
+    const provider = createCatalogOcrRecognition(catalog);
+    const result = await provider.identifyCard({
+      imageRef: 'data:image/jpeg;base64,x',
+      ocr: { name: 'Meloetta ex', number: 'RC25' },
+    });
+    expect(calls).toEqual(['Meloetta ex RC25', 'Meloetta RC25']);
+    const top = result.candidates[0];
+    expect(top?.cardExternalId).toBe('g1-RC25');
+    // Dash vs space is invisible to the similarity metric; number matches too.
+    expect(top?.confidence).toBeGreaterThan(0.8);
+  });
+
   it('retries with the longest name word when the full name finds nothing', async () => {
     const calls: string[] = [];
     const catalog: CardCatalogProvider = {

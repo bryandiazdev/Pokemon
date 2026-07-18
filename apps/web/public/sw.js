@@ -1,7 +1,7 @@
 /* Pokémon Stock Radar service worker — offline shell + safe caching.
  * IMPORTANT: never cache authenticated API responses or private images. Only the
  * static app shell and public assets are cached. Private data is network-only. */
-const CACHE = 'psr-shell-v1';
+const CACHE = 'psr-shell-v2';
 const SHELL = ['/', '/offline', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -22,11 +22,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Never cache API calls or anything that could contain private data.
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/app/')) {
+  // NOTE: '/app' (the dashboard itself) must match too, not just '/app/...' —
+  // a prefix-with-slash check froze the Home tab in the shell cache.
+  const isAppPage = url.pathname === '/app' || url.pathname.startsWith('/app/');
+  if (url.pathname.startsWith('/api/') || isAppPage) {
     event.respondWith(
-      fetch(request).catch(() =>
-        url.pathname.startsWith('/app/') ? caches.match('/offline') : Response.error(),
-      ),
+      fetch(request).catch(() => (isAppPage ? caches.match('/offline') : Response.error())),
     );
     return;
   }

@@ -86,6 +86,53 @@ describe('tcgdex catalog adapter (keyless)', () => {
     // Both results are localId 4, so both survive the number filter; setId derives from id.
     expect(res.cards.map((c) => c.setExternalId).sort()).toEqual(['base1', 'base4']);
   });
+
+  it('splits letter-prefixed collector numbers ("Meloetta ex RC25")', async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(
+        JSON.stringify([
+          { id: 'g1-RC25', localId: 'RC25', name: 'Meloetta-EX' },
+          { id: 'g1-RC26', localId: 'RC26', name: 'Meloetta-EX' },
+        ]),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const cat = createTcgdexCatalog({ fetchImpl });
+    const res = await cat.searchCards({ query: 'Meloetta ex RC25' });
+
+    // The name filter keeps the full name; RC25 becomes the number filter.
+    expect(calls[0]).toContain('name=Meloetta+ex');
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0]).toMatchObject({ externalId: 'g1-RC25', number: 'RC25' });
+  });
+
+  it('does not eat trailing name words without digits ("Meloetta ex")', async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify([]), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const cat = createTcgdexCatalog({ fetchImpl });
+    await cat.searchCards({ query: 'Meloetta ex' });
+    expect(calls[0]).toContain('name=Meloetta+ex');
+  });
+
+  it('zero-strips the number filter ("RC05" matches localId RC5)', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([{ id: 'g1-RC5', localId: 'RC5', name: 'Meloetta-EX' }]),
+        { status: 200 },
+      ),
+    ) as unknown as typeof fetch;
+    const cat = createTcgdexCatalog({ fetchImpl });
+    const res = await cat.searchCards({ query: 'Meloetta RC05' });
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0]!.externalId).toBe('g1-RC5');
+  });
 });
 
 describe('tcgdex raw pricing adapter', () => {
