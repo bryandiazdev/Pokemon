@@ -53,12 +53,20 @@ function resolveSelectors(): ProviderConfig {
       ? 'demo'
       : 'catalog-ocr'
     : env.RECOGNITION_PROVIDER;
-  // Graded pricing goes live automatically when a PriceCharting key exists
-  // (needs a live catalog to resolve card names for the lookup).
+  // Graded pricing goes live automatically (needs a live catalog to resolve
+  // card names for the lookup). Preference order:
+  //   PriceCharting (paid key — real sold prices)
+  //   > eBay Browse (free developer keyset — live ask-based estimates)
+  //   > demo.
+  const hasEbay = Boolean(env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET);
   const gradedPricing = unset(process.env.GRADED_PRICING_PROVIDER)
-    ? env.PRICECHARTING_API_KEY && catalog !== 'demo'
-      ? 'pricecharting'
-      : 'demo'
+    ? catalog === 'demo'
+      ? 'demo'
+      : env.PRICECHARTING_API_KEY
+        ? 'pricecharting'
+        : hasEbay
+          ? 'ebay'
+          : 'demo'
     : env.GRADED_PRICING_PROVIDER;
 
   return {
@@ -71,6 +79,8 @@ function resolveSelectors(): ProviderConfig {
     activeListings: env.ACTIVE_LISTINGS_PROVIDER,
     pokemonTcgApiKey: env.POKEMON_TCG_API_KEY,
     priceChartingApiKey: env.PRICECHARTING_API_KEY,
+    ebayClientId: env.EBAY_CLIENT_ID,
+    ebayClientSecret: env.EBAY_CLIENT_SECRET,
   };
 }
 

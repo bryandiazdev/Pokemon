@@ -12,6 +12,7 @@ import { createPokemonTcgRawPricing } from './adapters/pokemontcg-pricing';
 import { createTcgdexCatalog, createTcgdexRawPricing } from './adapters/tcgdex';
 import { createCatalogOcrRecognition } from './adapters/catalog-ocr-recognition';
 import { createPriceChartingGradedPricing } from './adapters/pricecharting';
+import { createEbayGradedPricing } from './adapters/ebay-graded';
 
 export interface ProviderConfig {
   catalog: string;
@@ -23,6 +24,8 @@ export interface ProviderConfig {
   activeListings: string;
   pokemonTcgApiKey?: string;
   priceChartingApiKey?: string;
+  ebayClientId?: string;
+  ebayClientSecret?: string;
 }
 
 export function buildRegistry(
@@ -67,10 +70,16 @@ export function buildRegistry(
     primary.rawPricing = demo.rawPricing;
   }
 
-  // Graded pricing: PriceCharting (paid key) is the live option, else demo.
+  // Graded pricing: PriceCharting (paid key, real sold prices) or eBay Browse
+  // (free keyset, live ask-based estimates), else demo.
   if (config.gradedPricing === 'pricecharting' && config.priceChartingApiKey) {
     primary.gradedPricing = createPriceChartingGradedPricing(primary.catalog!, {
       apiKey: config.priceChartingApiKey,
+    });
+  } else if (config.gradedPricing === 'ebay' && config.ebayClientId && config.ebayClientSecret) {
+    primary.gradedPricing = createEbayGradedPricing(primary.catalog!, {
+      clientId: config.ebayClientId,
+      clientSecret: config.ebayClientSecret,
     });
   } else {
     if (config.gradedPricing !== 'demo') warn('gradedPricing', config.gradedPricing);

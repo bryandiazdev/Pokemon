@@ -249,9 +249,11 @@ export default async function CardPage({ params }: Params) {
         <p className="mt-3 text-xs text-muted">
           Grading-company names are trademarks of their owners, shown for identification and
           comparison only.{' '}
-          {pricing.graded[0]?.freshness === 'live'
-            ? 'Live market values via PriceCharting, derived from sold listings; grades 7–9.5 aggregate across grading companies.'
-            : 'Values are illustrative demo data.'}
+          {pricing.graded[0]?.market === 'ebay-asks'
+            ? 'Values are estimated from current eBay asking prices for graded listings (not completed sales): the typical lower ask, with the range spanning cheapest ask to median.'
+            : pricing.graded[0]?.freshness === 'live'
+              ? 'Live market values via PriceCharting, derived from sold listings; grades 7–9.5 aggregate across grading companies.'
+              : 'Values are illustrative demo data.'}
         </p>
       </Card>
 
