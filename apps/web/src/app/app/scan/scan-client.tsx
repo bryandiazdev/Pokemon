@@ -42,6 +42,7 @@ export function ScanClient() {
   const [visionOff, setVisionOff] = useState(false);
   const [visionNote, setVisionNote] = useState<string | null>(null);
   const [serverFault, setServerFault] = useState(false);
+  const [paywalled, setPaywalled] = useState(false);
   const [confirmed, setConfirmed] = useState<Candidate | null>(null);
   const [saving, setSaving] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -63,6 +64,11 @@ export function ScanClient() {
     if (!resBody.success) {
       setMessage(resBody.error.message);
       setServerFault(resBody.error.code === 'internal_error');
+      setPaywalled(
+        ['usage_limit_reached', 'entitlement_exceeded', 'subscription_required'].includes(
+          resBody.error.code,
+        ),
+      );
       setPhase('rejected');
       return;
     }
@@ -180,11 +186,23 @@ export function ScanClient() {
         <div className="flex items-center gap-2 text-warning">
           <AlertTriangle size={18} />
           <span className="font-medium">
-            {serverFault ? 'Scanning is temporarily unavailable' : 'Let’s retake that'}
+            {paywalled
+              ? 'Scan limit reached'
+              : serverFault
+                ? 'Scanning is temporarily unavailable'
+                : 'Let’s retake that'}
           </span>
         </div>
         <p className="text-sm text-muted">{message}</p>
         <div className="flex gap-2">
+          {paywalled && (
+            <Link
+              href="/pricing"
+              className="inline-flex min-h-[44px] items-center rounded-lg bg-accent px-4 text-sm font-medium text-bg hover:bg-accent-strong"
+            >
+              See plans
+            </Link>
+          )}
           <Button onClick={() => setPhase('capture')}>Try again</Button>
           <Link href="/app/collection/add" className="self-center text-sm text-accent hover:underline">
             Search manually

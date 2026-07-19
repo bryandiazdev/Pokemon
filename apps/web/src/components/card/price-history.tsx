@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ValueLineChart, type SeriesPoint } from '@/components/charts/line-chart';
 import { cn } from '@psr/ui';
 
@@ -18,6 +19,7 @@ export function PriceHistory({
   const [range, setRange] = useState<Range>('90d');
   const [data, setData] = useState<SeriesPoint[]>(initial);
   const [loading, setLoading] = useState(false);
+  const [clamped, setClamped] = useState(false);
 
   useEffect(() => {
     if (range === '90d') {
@@ -31,7 +33,10 @@ export function PriceHistory({
     })
       .then((r) => r.json())
       .then((b) => {
-        if (b.success) setData(b.data.points);
+        if (b.success) {
+          setData(b.data.points);
+          setClamped(Boolean(b.data.clamped));
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -58,6 +63,14 @@ export function PriceHistory({
           </button>
         ))}
       </div>
+      {clamped && (
+        <p className="mb-2 text-xs text-muted">
+          Showing the most recent 30 days.{' '}
+          <Link href="/pricing" className="text-accent hover:underline">
+            See how this card&apos;s price has moved over time with Collector.
+          </Link>
+        </p>
+      )}
       {data.length === 0 ? (
         <p className="flex h-40 items-center justify-center text-center text-sm text-muted">
           No price history is available from the current data source yet. Daily snapshots build

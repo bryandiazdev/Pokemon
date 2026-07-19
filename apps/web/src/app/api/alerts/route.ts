@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { jsonOk, jsonError, withErrorHandling, parse } from '@/lib/api';
+import { jsonOk, jsonPaywall, withErrorHandling, parse } from '@/lib/api';
 import { RAW_CONDITIONS, GRADING_COMPANIES } from '@psr/types';
 import { getEntitlementContext, checkAlertCreate } from '@/lib/services/entitlements';
 import { isDemo } from '@/lib/env';
@@ -22,7 +22,7 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   const ctx = await getEntitlementContext();
   const gate = checkAlertCreate(ctx);
-  if (!gate.allowed) return jsonError('entitlement_exceeded', gate.message);
+  if (!gate.allowed) return jsonPaywall(gate);
 
   return jsonOk(
     { persisted: !isDemo, alert: { id: crypto.randomUUID(), enabled: true, ...parsed.value } },

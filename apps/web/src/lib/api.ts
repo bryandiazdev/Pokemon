@@ -27,6 +27,28 @@ export function jsonError(
   return NextResponse.json(body, { status: ERROR_STATUS[code] });
 }
 
+/**
+ * Structured quota/paywall response (402): the client receives the user's
+ * plan, usage, limit, and the recommended upgrade — never a bare error.
+ */
+export function jsonPaywall(denied: {
+  reason: 'usage_limit_reached' | 'entitlement_exceeded' | 'subscription_required';
+  message: string;
+  paywall: {
+    plan: string;
+    metric: string;
+    used: number;
+    limit: number | null;
+    recommendedPlan: string;
+  };
+}): NextResponse {
+  const body = {
+    ...fail(denied.reason, denied.message, { requestId: requestId() }),
+    paywall: denied.paywall,
+  };
+  return NextResponse.json(body, { status: ERROR_STATUS[denied.reason] });
+}
+
 /** Parse+validate a request payload, returning a typed value or an error response. */
 export function parse<S extends z.ZodTypeAny>(
   schema: S,

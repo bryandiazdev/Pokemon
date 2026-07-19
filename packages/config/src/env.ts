@@ -61,11 +61,21 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   DIRECT_URL: z.string().optional(),
 
-  // Stripe — optional in demo (mock billing mode).
+  // Stripe — optional in demo (mock billing mode). One price ID per paid
+  // plan/interval; checkout only ever uses these (server-side allowlist).
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_COLLECTOR_PRO_MONTHLY_PRICE_ID: z.string().optional(),
-  STRIPE_COLLECTOR_PRO_ANNUAL_PRICE_ID: z.string().optional(),
+  STRIPE_COLLECTOR_MONTHLY_PRICE_ID: z.string().optional(),
+  STRIPE_COLLECTOR_ANNUAL_PRICE_ID: z.string().optional(),
+  STRIPE_PRO_MONTHLY_PRICE_ID: z.string().optional(),
+  STRIPE_PRO_ANNUAL_PRICE_ID: z.string().optional(),
+  /** Optional pre-created Billing Portal configuration to pin. */
+  STRIPE_CUSTOMER_PORTAL_CONFIGURATION_ID: z.string().optional(),
+  /**
+   * DEV ONLY: force every signed-in user onto a plan without Stripe
+   * (e.g. "pro"). Ignored outside development builds; defaults to off.
+   */
+  DEV_BILLING_PLAN_OVERRIDE: z.enum(['free', 'collector', 'pro']).optional(),
 
   // Infra — optional; each integration no-ops with a warning when absent.
   UPSTASH_REDIS_REST_URL: optionalUrl,

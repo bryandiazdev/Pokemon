@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { jsonOk, jsonError, withErrorHandling, parse } from '@/lib/api';
+import { jsonOk, jsonError, jsonPaywall, withErrorHandling, parse } from '@/lib/api';
 import { RAW_CONDITIONS, GRADING_COMPANIES, OWNERSHIP_TYPES } from '@psr/types';
 import { getEntitlementContext, checkCollectionAdd } from '@/lib/services/entitlements';
 import { getCurrentUser } from '@/lib/auth';
@@ -37,10 +37,11 @@ export const POST = withErrorHandling(async (req: Request) => {
   }
 
   // Server-authoritative entitlement check (never trust the client).
+  // Over-limit collections stay fully viewable — only ADDING is blocked.
   const ctx = await getEntitlementContext();
   const gate = checkCollectionAdd(ctx);
   if (!gate.allowed) {
-    return jsonOk({ persisted: false, gate }, { blocked: true });
+    return jsonPaywall(gate);
   }
 
   const { id } = await addCollectionItem(user.id, {

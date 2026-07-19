@@ -1,9 +1,13 @@
-import { withErrorHandling } from '@/lib/api';
+import { withErrorHandling, jsonPaywall } from '@/lib/api';
 import { getPortfolioSummary } from '@/lib/services/portfolio';
+import { getEntitlementContext, checkExport } from '@/lib/services/entitlements';
 import { fmtMinor } from '@/lib/format';
 
-/** CSV export of the collection. Large exports would run as a background job. */
+/** CSV export of the collection (Collector+). Large exports would run as a background job. */
 export const GET = withErrorHandling(async () => {
+  const ctx = await getEntitlementContext();
+  const gate = checkExport(ctx);
+  if (!gate.allowed) return jsonPaywall(gate);
   const summary = await getPortfolioSummary();
   const header = [
     'card',

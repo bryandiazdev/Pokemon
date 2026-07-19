@@ -1,12 +1,24 @@
+import type Stripe from 'stripe';
 import { withErrorHandling, jsonError, jsonOk } from '@/lib/api';
-import { constructWebhookEvent } from '@/lib/services/billing';
+import {
+  constructWebhookEvent,
+  getStripe,
+  syncSubscription,
+  applyPlanEntitlements,
+  resolveUserId,
+} from '@/lib/services/billing';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 /**
- * Stripe webhook handler. Signature-verified and IDEMPOTENT: each event id is
- * recorded in `stripe_webhook_events`; a duplicate delivery is acknowledged
- * without reprocessing. Subscription state is written with the service-role
- * client after verification (never trusted from the client).
+ * Stripe webhook — the SOURCE OF TRUTH for subscription state.
+ *
+ * - Signature-verified against the RAW request body (read as text before any
+ *   JSON parsing).
+ * - Idempotent: the event id is inserted into `stripe_webhook_events` first;
+ *   a unique-violation means a duplicate delivery and is acked untouched.
+ * - Every state change flows through syncSubscription(), which upserts the
+ *   subscription row and writes catalog entitlements for the effective plan.
+ * - Deletion reverts the user to Free: data is preserved, limits shrink.
  */
 export const POST = withErrorHandling(async (req: Request) => {
   const signature = req.headers.get('stripe-signature');
@@ -17,60 +29,99 @@ export const POST = withErrorHandling(async (req: Request) => {
   if (!event) return jsonError('unauthorized', 'Invalid webhook signature.');
 
   const supabase = getAdminSupabase();
-  if (supabase) {
-    // Idempotency: insert the event id; if it already exists, skip processing.
-    const { error: insertError } = await supabase
-      .from('stripe_webhook_events')
-      .insert({ id: event.id, type: event.type, payload: event.data.object as never });
-    if (insertError) {
-      // Unique-violation → already processed.
-      return jsonOk({ received: true, duplicate: true });
-    }
+  if (!supabase) return jsonOk({ received: true, skipped: 'no database' });
+
+  // Idempotency ledger: first delivery wins.
+  const { error: insertError } = await supabase
+    .from('stripe_webhook_events')
+    .insert({ id: event.id, type: event.type, processed_at: new Date().toISOString() });
+  if (insertError) {
+    return jsonOk({ received: true, duplicate: true });
+  }
+
+  try {
     await handleEvent(event, supabase);
+  } catch (err) {
+    // Log without dumping the full payload; Stripe will retry on 5xx, and the
+    // ledger row means the retry is deduped — so delete it to allow reprocessing.
+    // eslint-disable-next-line no-console
+    console.error(`[stripe-webhook] ${event.type} (${event.id}) failed:`, err);
+    await supabase.from('stripe_webhook_events').delete().eq('id', event.id);
+    return jsonError('internal_error', 'Webhook processing failed.');
   }
 
   return jsonOk({ received: true });
 });
 
-async function handleEvent(
-  event: import('stripe').Stripe.Event,
-  supabase: NonNullable<ReturnType<typeof getAdminSupabase>>,
-): Promise<void> {
+type AdminClient = NonNullable<ReturnType<typeof getAdminSupabase>>;
+
+async function handleEvent(event: Stripe.Event, supabase: AdminClient): Promise<void> {
   switch (event.type) {
-    case 'checkout.session.completed':
+    // A finished checkout: the session references the subscription — fetch the
+    // full object and sync (metadata was attached via subscription_data).
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userId = session.metadata?.userId ?? session.client_reference_id;
+      // Persist the customer linkage even before the subscription events land.
+      if (userId && session.customer) {
+        await supabase
+          .from('profiles')
+          .update({ stripe_customer_id: String(session.customer) })
+          .eq('id', userId)
+          .is('stripe_customer_id', null);
+      }
+      if (session.subscription) {
+        const stripe = getStripe();
+        if (stripe) {
+          const sub = await stripe.subscriptions.retrieve(String(session.subscription));
+          await syncSubscription(supabase, sub);
+        }
+      }
+      break;
+    }
+
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
-      const sub = event.data.object as import('stripe').Stripe.Subscription;
-      const userId = (sub.metadata?.userId as string) ?? null;
-      if (!userId) break;
-      await supabase.from('subscriptions').upsert(
-        {
-          user_id: userId,
-          stripe_customer_id: String(sub.customer),
-          stripe_subscription_id: sub.id,
-          stripe_price_id: sub.items.data[0]?.price.id ?? null,
-          status: sub.status,
-          current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-          cancel_at_period_end: sub.cancel_at_period_end,
-        },
-        { onConflict: 'stripe_subscription_id' },
-      );
-      // Entitlements would be synced from plan defaults here.
+      await syncSubscription(supabase, event.data.object as Stripe.Subscription);
       break;
     }
+
     case 'customer.subscription.deleted': {
-      const sub = event.data.object as import('stripe').Stripe.Subscription;
+      const sub = event.data.object as Stripe.Subscription;
       await supabase
         .from('subscriptions')
-        .update({ status: 'canceled' })
+        .update({ status: 'canceled', cancel_at_period_end: false })
         .eq('stripe_subscription_id', sub.id);
+      const userId = await resolveUserId(supabase, sub);
+      if (userId) {
+        // Revert to Free. Collection data is preserved; over-limit collections
+        // stay viewable — only ADDING is blocked by the entitlement gate.
+        await applyPlanEntitlements(supabase, userId, 'free');
+      }
       break;
     }
+
+    // Payment lifecycle: statuses arrive via subscription.updated as well, but
+    // these keep the row fresh when Stripe only emits the invoice events.
+    case 'invoice.paid':
     case 'invoice.payment_failed': {
-      // Mark past_due; a grace-period + dunning email would be triggered here.
+      const invoice = event.data.object as Stripe.Invoice;
+      const subId =
+        typeof invoice.subscription === 'string'
+          ? invoice.subscription
+          : (invoice.subscription?.id ?? null);
+      if (subId) {
+        const stripe = getStripe();
+        if (stripe) {
+          const sub = await stripe.subscriptions.retrieve(subId);
+          await syncSubscription(supabase, sub);
+        }
+      }
       break;
     }
+
     default:
+      // Unhandled event types are acknowledged (and recorded in the ledger).
       break;
   }
 }

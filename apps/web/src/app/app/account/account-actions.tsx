@@ -4,21 +4,35 @@ import { Button } from '@/components/ui/button';
 
 export function UpgradeButton() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   async function upgrade() {
     setLoading(true);
-    const res = await fetch('/api/billing/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ interval: 'month' }),
-    });
-    const body = await res.json();
-    setLoading(false);
-    if (body.success && body.data.url) window.location.href = body.data.url;
+    setError('');
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'collector', interval: 'month' }),
+      });
+      const body = await res.json();
+      if (body.success && body.data.url) {
+        window.location.href = body.data.url;
+        return;
+      }
+      setError(body.error?.message ?? 'Could not start checkout.');
+    } catch {
+      setError('Network error — try again.');
+    } finally {
+      setLoading(false);
+    }
   }
   return (
-    <Button variant="gold" onClick={upgrade} disabled={loading}>
-      {loading ? 'Redirecting…' : 'Upgrade to Collector Pro — $4.99/mo'}
-    </Button>
+    <span className="inline-flex flex-col gap-1">
+      <Button variant="gold" onClick={upgrade} disabled={loading}>
+        {loading ? 'Redirecting…' : 'Upgrade to Collector — $7.99/mo'}
+      </Button>
+      {error && <span className="text-xs text-warning">{error}</span>}
+    </span>
   );
 }
 

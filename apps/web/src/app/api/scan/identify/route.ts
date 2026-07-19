@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import type { NormalizedSet } from '@psr/providers';
-import { jsonOk, jsonError, withErrorHandling, parse } from '@/lib/api';
+import { jsonOk, jsonError, jsonPaywall, withErrorHandling, parse } from '@/lib/api';
 import { getRegistry } from '@/lib/providers';
 import { matchSets } from '@/lib/catalog-match';
-import { getEntitlementContext, checkQuickScan } from '@/lib/services/entitlements';
+import {
+  getEntitlementContext,
+  checkQuickScan,
+  consumeUsage,
+  releaseUsage,
+} from '@/lib/services/entitlements';
 import { hasVisionScan, identifyCardWithVision, type ScanImage } from '@/lib/services/scan-llm';
 
 const metric = z.number().min(0).max(1).optional();
@@ -95,7 +100,7 @@ export const POST = withErrorHandling(async (req: Request) => {
   const ctx = await getEntitlementContext();
   const gate = checkQuickScan(ctx);
   if (!gate.allowed) {
-    return jsonError('usage_limit_reached', gate.message);
+    return jsonPaywall(gate);
   }
 
   const visionAvailable = hasVisionScan();
@@ -120,6 +125,26 @@ export const POST = withErrorHandling(async (req: Request) => {
     if (issues.length > 0) {
       return jsonError('image_rejected', issues.join(' '));
     }
+  }
+
+  // Metering: RESERVE one scan atomically before the (paid) vision work — a
+  // conditional UPDATE, so concurrent requests can't race past the limit.
+  // Any request that reaches the pipeline consumes the scan (the AI cost is
+  // incurred even when no card matches); we REFUND only when OUR provider
+  // fails, never for user-side photo problems that were already screened.
+  const consumed = await consumeUsage(ctx, 'quick_scan');
+  if (!consumed.allowed) {
+    return jsonPaywall({
+      reason: 'usage_limit_reached',
+      message: `You've used all ${consumed.limit} scans this month.`,
+      paywall: {
+        plan: ctx.entitlements.plan,
+        metric: 'quick_scan',
+        used: consumed.current,
+        limit: consumed.limit,
+        recommendedPlan: ctx.entitlements.plan === 'free' ? 'collector' : 'pro',
+      },
+    });
   }
 
   // Start from on-device OCR hints, then upgrade with server vision when
@@ -175,6 +200,8 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   if (!ocr.name && !ocr.number) {
     if (visionError) {
+      // OUR provider failed — refund the reserved scan.
+      await releaseUsage(ctx, 'quick_scan');
       return jsonError('internal_error', `Card identification is unavailable: ${visionError}`);
     }
     return jsonError(
@@ -203,7 +230,7 @@ export const POST = withErrorHandling(async (req: Request) => {
   return jsonOk({
     candidates: result.candidates,
     requiresConfirmation,
-    remaining: gate.remaining,
+    remaining: consumed.remaining,
     identifiedBy,
     visionAvailable,
     // Vision failed but device OCR produced *something* — flag that the

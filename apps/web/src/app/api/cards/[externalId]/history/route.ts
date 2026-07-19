@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { jsonOk, jsonError, withErrorHandling } from '@/lib/api';
 import { getRawHistory } from '@/lib/services/catalog';
+import { getEntitlementContext } from '@/lib/services/entitlements';
+import { resolveLimit } from '@psr/config';
 
 const rangeToDays: Record<string, number> = {
   '7d': 7,
@@ -20,6 +22,18 @@ export const GET = withErrorHandling(async (req: Request) => {
     .catch('90d')
     .parse(url.searchParams.get('range') ?? '90d');
   if (!externalId) return jsonError('validation_error', 'Missing card id.');
-  const points = await getRawHistory(externalId, rangeToDays[range]!);
-  return jsonOk({ points, range }, { freshness: 'demo' });
+
+  // History depth is an entitlement: Free sees the recent window (30d),
+  // Collector/Pro see everything. The response says when it was clamped so
+  // the chart can render an upgrade hint instead of silently truncating.
+  const ctx = await getEntitlementContext();
+  const { unlimited, value: maxDays } = resolveLimit(ctx.entitlements.historyDays);
+  const requestedDays = rangeToDays[range]!;
+  const days = unlimited ? requestedDays : Math.min(requestedDays, maxDays);
+
+  const points = await getRawHistory(externalId, days);
+  return jsonOk(
+    { points, range, clamped: days < requestedDays, historyDays: unlimited ? null : maxDays },
+    { freshness: 'demo' },
+  );
 });

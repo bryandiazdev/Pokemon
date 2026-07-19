@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -97,6 +98,7 @@ export function GradeClient() {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paywalled, setPaywalled] = useState(false);
   const [activeKey, setActiveKey] = useState<CaptureKey | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -196,6 +198,11 @@ export function GradeClient() {
       const body = await res.json();
       if (!body.success) {
         setError(body.error?.message ?? 'Analysis failed. Please try again.');
+        setPaywalled(
+          ['usage_limit_reached', 'entitlement_exceeded', 'subscription_required'].includes(
+            body.error?.code,
+          ),
+        );
         return;
       }
       setReport(body.data);
@@ -343,9 +350,17 @@ export function GradeClient() {
       </Card>
 
       {error && (
-        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-          {error}
-        </p>
+        <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          <p>{error}</p>
+          {paywalled && (
+            <Link
+              href="/pricing"
+              className="inline-flex min-h-[40px] items-center rounded-lg bg-accent px-4 text-sm font-medium text-bg hover:bg-accent-strong"
+            >
+              Estimate PSA-grade potential and grading ROI with Pro
+            </Link>
+          )}
+        </div>
       )}
 
       {requiredDone && softRequired.length > 0 && !loading && (

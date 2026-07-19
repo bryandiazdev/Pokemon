@@ -14,7 +14,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RadarMark } from '@/components/brand';
-import { PRICING } from '@psr/config';
+import { PLAN_PRICING } from '@psr/config';
 import { Section, SectionHeader } from '@/components/marketing/section';
 import { fmtMinor } from '@/lib/format';
 
@@ -106,10 +106,7 @@ function HeroSlab() {
 }
 
 export default function HomePage() {
-  const price = fmtMinor(
-    PRICING.collectorPro.monthly.amountMinor,
-    PRICING.collectorPro.monthly.currency,
-  );
+  const price = fmtMinor(PLAN_PRICING.collector.month, PLAN_PRICING.collector.currency);
 
   return (
     <>
@@ -232,14 +229,14 @@ export default function HomePage() {
         <Card slab className="overflow-hidden">
           <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div className="max-w-xl">
-              <Badge tone="gold">COLLECTOR PRO</Badge>
+              <Badge tone="gold">COLLECTOR</Badge>
               <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-content">
                 {price}
                 <span className="font-sans text-base font-normal text-muted">/month</span>
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Unlimited collection, full price history, raw + graded comparisons, batch scanning,
-                and advanced analytics. Start free; upgrade when you need more.
+                Unlimited collection, historical price charts, portfolio analytics, price alerts,
+                and CSV export. Start free; go Pro for AI-assisted grade analysis.
               </p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row md:w-auto">

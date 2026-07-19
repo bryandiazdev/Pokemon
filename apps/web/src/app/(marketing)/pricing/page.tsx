@@ -1,63 +1,60 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Check } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { PRICING } from '@psr/config';
-import { fmtMinor } from '@/lib/format';
 import { Section, SectionHeader } from '@/components/marketing/section';
+import { PricingPlans } from '@/components/billing/pricing-plans';
+import { getCurrentUser } from '@/lib/auth';
+import { getSubscriptionSummary } from '@/lib/services/billing';
+import { hasSupabase } from '@/lib/env';
+import type { PlanTier } from '@psr/config';
 
 export const metadata: Metadata = {
-  title: 'Pricing',
+  title: 'Pricing | Pokémon Stock Radar',
   description:
-    'Start free, or upgrade to Collector Pro for $4.99/month: 100 quick scans, 10 grade scans, unlimited collection, full history, alerts, CSV import/export, and advanced analytics.',
+    'Track your Pokémon card collection, monitor live market prices, and unlock AI-assisted grade potential analysis.',
+  alternates: { canonical: '/pricing' },
 };
-
-const FREE_FEATURES = [
-  'Public card & set search',
-  'Small collection (up to 50 cards)',
-  'Limited quick scans each month',
-  'Grade Potential demo',
-  'Watchlist with a few alerts',
-];
-
-const PRO_FEATURES = [
-  '100 quick scans / month',
-  '10 grade scans / month',
-  'Unlimited collection (with abuse protection)',
-  'Full price history',
-  'Raw + graded comparisons',
-  'Up to 100 price alerts',
-  'CSV import / export',
-  'Saved grade reports',
-  'Batch scanning',
-  'Advanced analytics',
-];
 
 const FAQ = [
   {
     q: 'Can I start for free?',
-    a: 'Yes. The Free plan lets you search public data, track a small collection, and try Grade Potential in demo mode. Upgrade only when you need more.',
+    a: 'Yes. The Free plan includes card identification by camera, current raw market prices, and a collection of up to 100 cards — enough to genuinely use the product before paying anything.',
+  },
+  {
+    q: 'What does Collector add?',
+    a: 'Collector is built for active collectors: unlimited collection size, historical price charts, portfolio gain/loss analytics, price alerts, market movers, and CSV export — up to 500 scans a month.',
+  },
+  {
+    q: 'What does Pro add?',
+    a: 'Pro is grading intelligence: AI-assisted condition analysis (centering, corners, edges, surface), estimated grade potential with a confidence breakdown, "should I grade this?" recommendations, and grading ROI analysis. Grade estimates are informational only — final grades are determined solely by the grading company.',
+  },
+  {
+    q: 'How does annual billing work?',
+    a: 'Annual plans bill once a year at a discount versus twelve monthly payments. The exact savings are shown on the toggle above — calculated from the real prices, not a marketing number.',
   },
   {
     q: 'How is billing handled?',
-    a: 'Subscriptions are processed by Stripe. Your plan and entitlements are enforced server-side, so what you can access is always determined authoritatively on our servers — not in the browser.',
-  },
-  {
-    q: 'Is there an annual plan?',
-    a: 'Annual pricing is configured in Stripe and may be offered at checkout. Monthly is shown here as the reference price.',
+    a: 'Subscriptions are processed by Stripe. Your plan and limits are enforced on our servers — never just hidden in the browser. You can manage payment methods, invoices, plan changes, and cancellation from the billing portal in your account.',
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes. You can cancel from your account at any time and keep access through the end of your current billing period.',
+    a: 'Yes. Cancel from your account at any time and keep access through the end of the period you paid for. Your collection data is never deleted — if you end up over the Free limits, everything stays viewable; only adding more is paused.',
   },
 ];
 
-export default function PricingPage() {
-  const monthly = fmtMinor(
-    PRICING.collectorPro.monthly.amountMinor,
-    PRICING.collectorPro.monthly.currency,
-  );
+export default async function PricingPage() {
+  // Server-rendered subscription state: no client flash, no layout shift.
+  let currentPlan: PlanTier | null = null;
+  let signedIn = false;
+  try {
+    const user = await getCurrentUser();
+    if (user && !user.isDemo && hasSupabase) {
+      signedIn = true;
+      const summary = await getSubscriptionSummary(user.id);
+      currentPlan = summary.plan;
+    }
+  } catch {
+    // Render signed-out pricing rather than failing the page.
+  }
 
   return (
     <>
@@ -65,72 +62,13 @@ export default function PricingPage() {
         <SectionHeader
           as="h1"
           eyebrow="Pricing"
-          title="Simple pricing for serious collectors"
-          lead="Start free. Upgrade to Collector Pro when your collection outgrows the basics."
+          title="Choose how deep you want to go."
+          lead="Start free. Upgrade for advanced market intelligence, portfolio tracking, and AI-assisted grade analysis."
         />
       </Section>
 
       <Section className="pt-0">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Free */}
-          <Card className="flex flex-col">
-            <Badge tone="neutral">Free</Badge>
-            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-content">
-              $0<span className="text-base font-normal text-muted">/month</span>
-            </h2>
-            <p className="mt-2 text-sm text-muted">
-              Everything you need to get started and try the tool.
-            </p>
-            <ul className="mt-6 flex-1 space-y-3">
-              {FREE_FEATURES.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-content">
-                  <Check size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/sign-up"
-              className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-3 text-sm font-semibold text-content transition-colors hover:bg-surface-elevated"
-            >
-              Create free account
-            </Link>
-          </Card>
-
-          {/* Collector Pro */}
-          <Card className="flex flex-col border-accent/40 ring-1 ring-accent/20">
-            <div className="flex items-center gap-2">
-              <Badge tone="gold">Collector Pro</Badge>
-              <Badge tone="info">Most popular</Badge>
-            </div>
-            <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight text-content">
-              {monthly}
-              <span className="text-base font-normal text-muted">/month</span>
-            </h2>
-            <p className="mt-2 text-sm text-muted">
-              {PRICING.collectorPro.annualNote}
-            </p>
-            <ul className="mt-6 flex-1 space-y-3">
-              {PRO_FEATURES.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-content">
-                  <Check size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/sign-up"
-              className="mt-8 inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-5 py-3 text-sm font-semibold text-bg transition-colors hover:bg-accent-strong"
-            >
-              Get Collector Pro
-            </Link>
-          </Card>
-        </div>
-
-        <p className="mt-6 text-sm text-muted">
-          Plan limits are enforced server-side and can be adjusted per account. Prices are shown for
-          reference; Stripe is the source of truth at checkout.
-        </p>
+        <PricingPlans currentPlan={currentPlan} signedIn={signedIn} />
       </Section>
 
       <Section className="pt-0">

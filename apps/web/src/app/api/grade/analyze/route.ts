@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { jsonOk, jsonError, withErrorHandling, parse } from '@/lib/api';
+import { jsonOk, jsonError, jsonPaywall, withErrorHandling, parse } from '@/lib/api';
 import {
   evaluateGrade,
   DISCLAIMER_VERSION,
@@ -9,7 +9,12 @@ import {
   type GradeEstimate,
 } from '@psr/grading-rules';
 import type { SubmissionRecommendation } from '@psr/types';
-import { getEntitlementContext, checkGradeScan } from '@/lib/services/entitlements';
+import {
+  getEntitlementContext,
+  checkGradeScan,
+  consumeUsage,
+  releaseUsage,
+} from '@/lib/services/entitlements';
 import { env } from '@/lib/env';
 import { analyzeGradeWithVision, hasVisionGrade, visionGradeProvider } from '@/lib/services/grade-llm';
 
@@ -193,7 +198,7 @@ function mapVision(v: VisionGradeResponse) {
 export const POST = withErrorHandling(async (req: Request) => {
   const ctx = await getEntitlementContext();
   const gate = checkGradeScan(ctx);
-  if (!gate.allowed) return jsonError('usage_limit_reached', gate.message);
+  if (!gate.allowed) return jsonPaywall(gate);
 
   const contentType = req.headers.get('content-type') ?? '';
 
@@ -230,6 +235,23 @@ export const POST = withErrorHandling(async (req: Request) => {
     // to this route and only the server reads the API keys. Secrets are never
     // sent to the client or embedded in the Next.js bundle.
     if (hasVisionGrade()) {
+      // RESERVE one AI grade check atomically before the expensive vision
+      // call; refunded below if OUR analysis fails. Concurrent requests
+      // cannot race past the monthly limit (single conditional UPDATE).
+      const consumed = await consumeUsage(ctx, 'grade_scan');
+      if (!consumed.allowed) {
+        return jsonPaywall({
+          reason: 'usage_limit_reached',
+          message: `You've used all ${consumed.limit} AI grade checks this month.`,
+          paywall: {
+            plan: ctx.entitlements.plan,
+            metric: 'grade_scan',
+            used: consumed.current,
+            limit: consumed.limit,
+            recommendedPlan: 'pro',
+          },
+        });
+      }
       try {
         const analysis = await analyzeGradeWithVision(files, captureTypes);
         const estimate = evaluateGrade(analysis.scores, analysis.findings);
@@ -246,14 +268,15 @@ export const POST = withErrorHandling(async (req: Request) => {
             ],
           },
           modelVersion: `${analysis.provider}:${analysis.model}`,
-          remaining: gate.remaining,
+          remaining: consumed.remaining,
           captures: captureTypes,
           analysisSummary: analysis.summary,
           cardIdentification: analysis.cardIdentification,
         });
       } catch (err) {
-        // A configured integration should fail visibly instead of silently
-        // returning sample grades that look like real analysis.
+        // OUR analysis failed — refund the reserved AI grade check, then
+        // fail visibly instead of silently returning sample grades.
+        await releaseUsage(ctx, 'grade_scan');
         // eslint-disable-next-line no-console
         console.error('[grade/analyze] vision analysis failed:', err);
         const message = err instanceof Error ? err.message : 'Vision analysis failed.';
