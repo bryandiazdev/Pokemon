@@ -16,13 +16,17 @@ import type { GradingCompany } from '@psr/types';
  * cache-aware functions instead of touching providers directly.
  */
 
-export async function searchCards(query: string, limit = 20): Promise<NormalizedCard[]> {
+export async function searchCards(
+  query: string,
+  limit = 20,
+  language?: string,
+): Promise<NormalizedCard[]> {
   const registry = getRegistry();
   const res = await registry.call(
     'catalog',
     'searchCards',
-    (a) => a.searchCards({ query, limit }),
-    { key: `catalog:search:${query}:${limit}`, ttlSeconds: 300 },
+    (a) => a.searchCards({ query, limit, language }),
+    { key: `catalog:search:${language ?? 'en'}:${query}:${limit}`, ttlSeconds: 300 },
   );
   return res.cards;
 }
@@ -43,8 +47,12 @@ function scoreSetMatch(set: NormalizedSet, query: string): number {
   return score;
 }
 
-export async function searchSets(query: string, limit = 10): Promise<NormalizedSet[]> {
-  const sets = await listSets();
+export async function searchSets(
+  query: string,
+  limit = 10,
+  language?: string,
+): Promise<NormalizedSet[]> {
+  const sets = await listSets(language);
   return sets
     .map((s) => ({ s, score: scoreSetMatch(s, query) }))
     .filter((x) => x.score > 0)
@@ -53,9 +61,9 @@ export async function searchSets(query: string, limit = 10): Promise<NormalizedS
     .map((x) => x.s);
 }
 
-export async function listSets(): Promise<NormalizedSet[]> {
-  return getRegistry().call('catalog', 'listSets', (a) => a.listSets({}), {
-    key: 'catalog:sets',
+export async function listSets(language?: string): Promise<NormalizedSet[]> {
+  return getRegistry().call('catalog', 'listSets', (a) => a.listSets({ language }), {
+    key: `catalog:sets:${language ?? 'en'}`,
     ttlSeconds: 3600,
   });
 }

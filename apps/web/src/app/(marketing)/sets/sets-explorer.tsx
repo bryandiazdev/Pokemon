@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { NormalizedSet } from '@psr/providers';
 import { Card } from '@/components/ui/card';
@@ -12,30 +12,90 @@ type SetsExplorerProps = {
   sets: NormalizedSet[];
 };
 
-export function SetsExplorer({ sets }: SetsExplorerProps) {
+const CATALOG_LANGS = [
+  { code: 'en', label: 'English' },
+  { code: 'ja', label: '日本語' },
+  { code: 'zh-cn', label: '中文（简体）' },
+  { code: 'zh-tw', label: '中文（繁體）' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ko', label: '한국어' },
+] as const;
+
+export function SetsExplorer({ sets: initialSets }: SetsExplorerProps) {
   const [query, setQuery] = useState('');
+  const [lang, setLang] = useState('en');
+  const [sets, setSets] = useState(initialSets);
+  const [langLoading, setLangLoading] = useState(false);
   const onQueryChange = useCallback((q: string) => setQuery(q), []);
+
+  // English arrives server-rendered; other catalogs load on demand.
+  useEffect(() => {
+    if (lang === 'en') {
+      setSets(initialSets);
+      return;
+    }
+    const ctrl = new AbortController();
+    setLangLoading(true);
+    fetch(`/api/sets?lang=${encodeURIComponent(lang)}`, { signal: ctrl.signal })
+      .then((res) => res.json())
+      .then((body) => {
+        if (body.success) setSets(body.data.sets ?? []);
+      })
+      .catch(() => {
+        /* aborted or offline — keep current sets */
+      })
+      .finally(() => setLangLoading(false));
+    return () => ctrl.abort();
+  }, [lang, initialSets]);
+
   const filtered = matchSets(sets, query);
   const hasQuery = query.trim().length > 0;
 
   return (
     <div className="space-y-8">
       <header className="space-y-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold">Sets</h1>
-          <p className="text-muted">
-            Browse sets, then track your completion inside your collection.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-semibold">Sets</h1>
+            <p className="text-muted">
+              Browse sets, then track your completion inside your collection.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <span className="label-strip">Language</span>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value)}
+              className="psr-input w-auto min-w-[9.5rem]"
+              aria-label="Catalog language"
+            >
+              {CATALOG_LANGS.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <CatalogSearch
           variant="hero"
           sets={sets}
           includeSets
           includeCards
+          lang={lang}
           onQueryChange={onQueryChange}
           placeholder="Search any set or card — name, series, or #number"
           hint="Suggestions appear as you type. Use ↑↓ and Enter to jump straight to a result."
         />
+        {langLoading && (
+          <p className="text-xs text-muted" aria-live="polite">
+            Loading the {CATALOG_LANGS.find((l) => l.code === lang)?.label} catalog…
+          </p>
+        )}
       </header>
 
       <section aria-live="polite" aria-atomic="true">

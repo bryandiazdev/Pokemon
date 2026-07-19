@@ -99,6 +99,56 @@ function setIdFromCardId(cardId: string): string {
   return idx > 0 ? cardId.slice(0, idx) : cardId;
 }
 
+/**
+ * TCGdex publishes language-scoped catalogs, and some cards exist ONLY in
+ * their language (Japanese/Chinese exclusive sets, for example). Lookups walk
+ * preferred → fallback languages and remember which language served each id,
+ * so subsequent lookups (including the pricing adapter's) go straight there.
+ */
+const LANG_FALLBACKS: Language[] = [
+  'en',
+  'ja',
+  'zh-cn',
+  'zh-tw',
+  'es',
+  'fr',
+  'de',
+  'it',
+  'pt',
+  'ko',
+];
+const resolvedCardLang = new Map<string, Language>();
+const resolvedSetLang = new Map<string, Language>();
+
+function langOrder(preferred: Language, known?: Language): Language[] {
+  const rest = LANG_FALLBACKS.filter((l) => l !== preferred && l !== known);
+  return [...(known ? [known] : []), ...(known === preferred ? [] : [preferred]), ...rest];
+}
+
+async function fetchAnyLang<T>(
+  request: <R>(path: string) => Promise<R>,
+  kind: 'cards' | 'sets',
+  id: string,
+  preferred: Language,
+): Promise<{ value: T; language: Language }> {
+  const cache = kind === 'cards' ? resolvedCardLang : resolvedSetLang;
+  let lastErr: unknown = null;
+  for (const language of langOrder(preferred, cache.get(id))) {
+    try {
+      const value = await request<T>(`/${language}/${kind}/${encodeURIComponent(id)}`);
+      cache.set(id, language);
+      return { value, language };
+    } catch (err) {
+      if (err instanceof ProviderError && err.code === 'not_found') {
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr ?? new ProviderError('not_found', NAME, `"${id}" not found in any language.`);
+}
+
 function makeRequest(doFetch: typeof fetch) {
   return async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
     let res: Response;
@@ -196,10 +246,13 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
     const hit = setCardsCache.get(key);
     if (hit && Date.now() - hit.at < SET_CARDS_TTL_MS) return hit.cards;
 
-    const set = await request<TcgdexSetFull>(
-      `/${language}/sets/${encodeURIComponent(setExternalId)}`,
+    const { value: set, language: foundLang } = await fetchAnyLang<TcgdexSetFull>(
+      request,
+      'sets',
+      setExternalId,
+      language,
     );
-    const cards = (set.cards ?? []).map((c) => normalizeBriefCard(c, language, setExternalId));
+    const cards = (set.cards ?? []).map((c) => normalizeBriefCard(c, foundLang, setExternalId));
     setCardsCache.set(key, { at: Date.now(), cards });
     return cards;
   }
@@ -290,13 +343,23 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
     },
 
     async getCard(externalId: string): Promise<NormalizedCard> {
-      const card = await request<TcgdexCardFull>(`/${defaultLang}/cards/${encodeURIComponent(externalId)}`);
-      return normalizeFullCard(card, defaultLang);
+      const { value, language } = await fetchAnyLang<TcgdexCardFull>(
+        request,
+        'cards',
+        externalId,
+        defaultLang,
+      );
+      return normalizeFullCard(value, language);
     },
 
     async getSet(externalId: string): Promise<NormalizedSet> {
-      const set = await request<TcgdexSetFull>(`/${defaultLang}/sets/${encodeURIComponent(externalId)}`);
-      return normalizeSet(set, defaultLang);
+      const { value, language } = await fetchAnyLang<TcgdexSetFull>(
+        request,
+        'sets',
+        externalId,
+        defaultLang,
+      );
+      return normalizeSet(value, language);
     },
 
     async listSets(input: SetSearchInput): Promise<NormalizedSet[]> {
@@ -374,8 +437,11 @@ export function createTcgdexRawPricing(opts: TcgdexAdapterOptions = {}): RawPric
   return {
     name: NAME,
     async getCurrentRawPrices(input: PricingInput): Promise<NormalizedPrice[]> {
-      const card = await request<TcgdexCardFull>(
-        `/${lang}/cards/${encodeURIComponent(input.cardExternalId)}`,
+      const { value: card } = await fetchAnyLang<TcgdexCardFull>(
+        request,
+        'cards',
+        input.cardExternalId,
+        lang,
       );
       const prices = normalize(card);
       return input.finish ? prices.filter((p) => !p.finish || p.finish === input.finish) : prices;
@@ -384,8 +450,11 @@ export function createTcgdexRawPricing(opts: TcgdexAdapterOptions = {}): RawPric
     async getRawPriceHistory(input: PriceHistoryInput): Promise<NormalizedPricePoint[]> {
       // Honest sparse trend from Cardmarket rolling averages (real provider data,
       // not interpolation). Dense daily history accrues via our own snapshots.
-      const card = await request<TcgdexCardFull>(
-        `/${lang}/cards/${encodeURIComponent(input.cardExternalId)}`,
+      const { value: card } = await fetchAnyLang<TcgdexCardFull>(
+        request,
+        'cards',
+        input.cardExternalId,
+        lang,
       );
       const cm = card.pricing?.cardmarket;
       if (!cm) return [];

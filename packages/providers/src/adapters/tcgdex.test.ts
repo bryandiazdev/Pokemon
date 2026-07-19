@@ -180,6 +180,36 @@ describe('tcgdex catalog adapter (keyless)', () => {
     expect(res.cards.every((c) => c.number === '151')).toBe(true);
   });
 
+  it('falls back through languages for exclusive cards (ja-only set)', async () => {
+    const calls: string[] = [];
+    const JA_CARD = {
+      id: 'sv4a-205',
+      localId: '205',
+      name: 'ピカチュウ',
+      set: { id: 'sv4a', name: 'シャイニートレジャーex', cardCount: { official: 190, total: 360 } },
+    };
+    const fetchImpl = vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      calls.push(u);
+      if (u.includes('/ja/cards/sv4a-205')) {
+        return new Response(JSON.stringify(JA_CARD), { status: 200 });
+      }
+      return new Response('not found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const cat = createTcgdexCatalog({ fetchImpl });
+    const card = await cat.getCard('sv4a-205');
+    expect(card).toMatchObject({ externalId: 'sv4a-205', name: 'ピカチュウ', language: 'ja' });
+    // en tried first, then ja hit.
+    expect(calls.some((u) => u.includes('/en/cards/sv4a-205'))).toBe(true);
+
+    // Second lookup goes straight to the remembered language — no 404 walk.
+    calls.length = 0;
+    await cat.getCard('sv4a-205');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/ja/cards/sv4a-205');
+  });
+
   it('zero-strips the number filter ("RC05" matches localId RC5)', async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(

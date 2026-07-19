@@ -154,7 +154,12 @@ export const POST = withErrorHandling(async (req: Request) => {
         if (vision.name) ocr.name = vision.name;
         if (vision.number) ocr.number = vision.number;
         if (vision.setName) ocr.setName = vision.setName;
-        if (vision.language) visionLanguage = vision.language;
+        if (vision.language) {
+          // The vision model emits ISO 639-1; TCGdex uses dialect-scoped
+          // catalogs for Chinese and plain codes elsewhere.
+          const langMap: Record<string, string> = { zh: 'zh-cn', 'pt-br': 'pt' };
+          visionLanguage = langMap[vision.language] ?? vision.language;
+        }
         setTotal = vision.setTotal;
         identifiedBy = 'vision';
       }

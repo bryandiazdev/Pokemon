@@ -39,6 +39,8 @@ type CatalogSearchProps = {
   className?: string;
   /** Optional hint shown under the hero input. */
   hint?: ReactNode;
+  /** Catalog language for remote lookups (default en). */
+  lang?: string;
 };
 
 type FlatItem =
@@ -60,6 +62,7 @@ export function CatalogSearch({
   placeholder = 'Search sets or cards — try “Charizard 4” or “Base Set”',
   className,
   hint,
+  lang,
 }: CatalogSearchProps) {
   const reactId = useId();
   const inputId = `catalog-search-${reactId}`;
@@ -112,6 +115,7 @@ export function CatalogSearch({
           q: trimmed,
           limit: '12',
           types,
+          ...(lang && lang !== 'en' ? { lang } : {}),
         });
         const res = await fetch(`/api/search?${params}`, { signal: ctrl.signal });
         const body = await res.json();
@@ -129,7 +133,7 @@ export function CatalogSearch({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [trimmed, includeCards, includeSets, hasLocalSets]);
+  }, [trimmed, includeCards, includeSets, hasLocalSets, lang]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
