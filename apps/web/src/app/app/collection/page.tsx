@@ -55,19 +55,22 @@ export default async function CollectionPage() {
               >
                 <Link
                   href={`/cards/${item.cardExternalId}`}
-                  className="flex aspect-[245/337] max-h-72 items-center justify-center bg-bg-deep/60 p-1.5"
+                  className="flex items-center justify-center bg-bg-deep/60 p-1.5"
                 >
                   {item.imageUrl ? (
-                    // aspect-[245/337] above is the true TCGdex card ratio — the
-                    // frame matches the artwork, so the image fills it cleanly.
+                    // w-full h-auto: the element takes the bitmap's own aspect
+                    // ratio, so nothing is stretched, letterboxed, or clipped —
+                    // and no CSS border-radius, because the card artwork has its
+                    // own printed rounded corners; a CSS radius shaves the
+                    // card's border at the edges.
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.imageUrl}
                       alt={item.name}
-                      className="h-full w-full rounded-lg object-contain"
+                      className="h-auto max-h-72 w-full max-w-full object-contain"
                     />
                   ) : (
-                    <span className="flex flex-col items-center gap-2 text-faint">
+                    <span className="flex aspect-[245/337] w-full flex-col items-center justify-center gap-2 text-faint">
                       <ImageIcon size={28} aria-hidden />
                       <span className="text-[11px]">No image</span>
                     </span>
