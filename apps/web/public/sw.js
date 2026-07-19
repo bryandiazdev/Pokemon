@@ -1,7 +1,7 @@
 /* Pokémon Stock Radar service worker — offline shell + safe caching.
  * IMPORTANT: never cache authenticated API responses or private images. Only the
  * static app shell and public assets are cached. Private data is network-only. */
-const CACHE = 'psr-shell-v2';
+const CACHE = 'psr-shell-v3';
 const SHELL = ['/', '/offline', '/manifest.webmanifest', '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
