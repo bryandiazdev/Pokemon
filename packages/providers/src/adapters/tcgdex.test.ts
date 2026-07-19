@@ -121,6 +121,65 @@ describe('tcgdex catalog adapter (keyless)', () => {
     expect(calls[0]).toContain('name=Meloetta+ex');
   });
 
+  // Mirrors real TCGdex behavior: BOTH spellings return cards ("Mew ex" hits
+  // 15 modern SV cards; "Mew-EX" hits the BW-era ones), so the alternate
+  // spelling must be tried when the collector number is missing from the
+  // first result set — not only when it is empty.
+  const mewFetch = (calls: string[]) =>
+    vi.fn(async (url: string | URL) => {
+      const u = String(url).toLowerCase();
+      calls.push(u);
+      if (u.includes('name=mew-ex')) {
+        return new Response(
+          JSON.stringify([
+            { id: 'bw6-46', localId: '46', name: 'Mew-EX' },
+            { id: 'bw6-120', localId: '120', name: 'Mew-EX' },
+            { id: 'bw11-RC24', localId: 'RC24', name: 'Mew-EX' },
+          ]),
+          { status: 200 },
+        );
+      }
+      if (u.includes('name=mew+ex')) {
+        return new Response(
+          JSON.stringify([
+            { id: 'sv3pt5-151', localId: '151', name: 'Mew ex' },
+            { id: 'sv2a-151', localId: '151', name: 'Mew ex' },
+          ]),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }) as unknown as typeof fetch;
+
+  it('finds dash-era cards when the number is not in the spaced results ("Mew ex RC24")', async () => {
+    const calls: string[] = [];
+    const cat = createTcgdexCatalog({ fetchImpl: mewFetch(calls) });
+    const res = await cat.searchCards({ query: 'Mew ex RC24' });
+
+    expect(calls.some((u) => u.includes('name=mew+ex'))).toBe(true);
+    expect(calls.some((u) => u.includes('name=mew-ex'))).toBe(true);
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0]).toMatchObject({ externalId: 'bw11-RC24', name: 'Mew-EX', number: 'RC24' });
+  });
+
+  it('stays on the spaced spelling when its number matches ("Mew ex 151")', async () => {
+    const calls: string[] = [];
+    const cat = createTcgdexCatalog({ fetchImpl: mewFetch(calls) });
+    const res = await cat.searchCards({ query: 'Mew ex 151' });
+
+    // The first spelling already contains #151 — no second fetch needed.
+    expect(calls.some((u) => u.includes('name=mew-ex'))).toBe(false);
+    expect(res.cards.map((c) => c.externalId).sort()).toEqual(['sv2a-151', 'sv3pt5-151']);
+  });
+
+  it('bridges the reverse direction ("Mew-EX 151" reaches the modern card)', async () => {
+    const calls: string[] = [];
+    const cat = createTcgdexCatalog({ fetchImpl: mewFetch(calls) });
+    const res = await cat.searchCards({ query: 'Mew-EX 151' });
+    expect(res.cards).toHaveLength(2);
+    expect(res.cards.every((c) => c.number === '151')).toBe(true);
+  });
+
   it('zero-strips the number filter ("RC05" matches localId RC5)', async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(

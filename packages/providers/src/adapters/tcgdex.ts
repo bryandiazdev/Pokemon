@@ -230,34 +230,63 @@ export function createTcgdexCatalog(opts: TcgdexAdapterOptions = {}): CardCatalo
       const number = numberMatch?.[1];
       const nameOnly = number ? query.slice(0, query.length - numberMatch![0].length).trim() : query;
 
-      const params = new URLSearchParams();
-      if (nameOnly) params.set('name', nameOnly);
-      if (input.setExternalId) params.set('set', input.setExternalId);
-      params.set('pagination:itemsPerPage', String(limit));
-      params.set('pagination:page', input.cursor ?? '1');
-
-      let cards: TcgdexCardBrief[];
-      try {
-        cards = await request<TcgdexCardBrief[]>(`/${language}/cards?${params.toString()}`);
-      } catch (err) {
-        if (err instanceof ProviderError && err.code === 'not_found') {
-          return { cards: [], nextCursor: null };
+      const fetchPage = async (name: string): Promise<TcgdexCardBrief[]> => {
+        const params = new URLSearchParams();
+        if (name) params.set('name', name);
+        if (input.setExternalId) params.set('set', input.setExternalId);
+        params.set('pagination:itemsPerPage', String(limit));
+        params.set('pagination:page', input.cursor ?? '1');
+        try {
+          return await request<TcgdexCardBrief[]>(`/${language}/cards?${params.toString()}`);
+        } catch (err) {
+          if (err instanceof ProviderError && err.code === 'not_found') return [];
+          throw err;
         }
-        throw err;
+      };
+
+      // Mechanic-suffix naming differs by era: BW/XY cards are dash-joined in
+      // the catalog ("Mew-EX", "Espeon-GX") while scans and humans write
+      // "Mew ex"; Scarlet & Violet is the reverse. The API's contains-match
+      // can't bridge the dash — and BOTH eras usually have cards under each
+      // spelling, so "no results" is the wrong trigger: "Mew ex" happily
+      // returns modern Mew ex cards while the scanned Legendary Treasures
+      // "Mew-EX" hides behind the dash. Try the alternate spelling whenever
+      // the requested collector number wasn't found under the first one.
+      const variants = [nameOnly];
+      if (nameOnly) {
+        const spaced = nameOnly.match(/^(.+)\s+(ex|gx)$/i);
+        const dashed = nameOnly.match(/^(.+)-(ex|gx)$/i);
+        if (spaced) variants.push(`${spaced[1]}-${spaced[2]!.toUpperCase()}`);
+        else if (dashed) variants.push(`${dashed[1]} ${dashed[2]}`);
       }
 
-      let normalized = cards.map((c) => normalizeBriefCard(c, language, input.setExternalId));
-      // Client-side number filter when the query carried a collector number.
       // Zero-strip the digit part so "RC05"/"RC5" and "058"/"58" compare equal.
-      if (number) {
-        const canon = (n: string) => n.toLowerCase().replace(/^([a-z]*)0+(?=\d)/, '$1');
-        const wanted = canon(number);
-        const filtered = normalized.filter((c) => canon(c.number ?? '') === wanted);
-        if (filtered.length > 0) normalized = filtered;
+      const canon = (n: string) => n.toLowerCase().replace(/^([a-z]*)0+(?=\d)/, '$1');
+      const wanted = number ? canon(number) : null;
+
+      let normalized: NormalizedCard[] | null = null;
+      for (const variant of variants) {
+        const cards = await fetchPage(variant);
+        if (cards.length === 0) continue;
+        const candidates = cards.map((c) => normalizeBriefCard(c, language, input.setExternalId));
+        if (!wanted) {
+          normalized = candidates;
+          break;
+        }
+        const filtered = candidates.filter((c) => canon(c.number ?? '') === wanted);
+        if (filtered.length > 0) {
+          normalized = filtered;
+          break;
+        }
+        // No number hit under this spelling — remember the results as a
+        // fallback, but keep trying the alternate spelling for an exact match.
+        normalized ??= candidates;
       }
+
+      const results = normalized ?? [];
       const page = Number(input.cursor ?? '1');
-      const nextCursor = normalized.length >= limit ? String(page + 1) : null;
-      return { cards: normalized, nextCursor };
+      const nextCursor = results.length >= limit ? String(page + 1) : null;
+      return { cards: results, nextCursor };
     },
 
     async getCard(externalId: string): Promise<NormalizedCard> {
