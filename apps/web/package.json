@@ -14,17 +14,18 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
+    "@hookform/resolvers": "^3.9.1",
     "@psr/config": "workspace:*",
     "@psr/grading-rules": "workspace:*",
     "@psr/providers": "workspace:*",
     "@psr/testing": "workspace:*",
     "@psr/types": "workspace:*",
     "@psr/ui": "workspace:*",
-    "@hookform/resolvers": "^3.9.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
-    "@trigger.dev/sdk": "^3.3.17",
     "@tanstack/react-query": "^5.62.7",
+    "@trigger.dev/sdk": "^3.3.17",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
@@ -36,8 +37,8 @@
     "recharts": "^2.15.0",
     "stripe": "^17.5.0",
     "tailwind-merge": "^2.6.0",
-    "zod": "^3.24.1",
-    "tesseract.js": "^5.1.1"
+    "tesseract.js": "^5.1.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

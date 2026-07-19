@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Fraunces, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { Analytics } from '@vercel/analytics/next';
 import { ThemeProvider } from '@/components/theme-provider';
 import { PwaRegister } from '@/components/pwa-register';
 
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <ThemeProvider>{children}</ThemeProvider>
         <PwaRegister />
+        <Analytics />
       </body>
     </html>
   );
