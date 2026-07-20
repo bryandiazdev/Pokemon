@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, FreshnessBadge } from '@/components/ui/badge';
 import { DataModeBanner } from '@/components/data-mode-banner';
 import { RemoveItemButton } from '@/components/collection/remove-item-button';
+import { ShareCollection } from '@/components/collection/share-collection';
 import { getPortfolioSummary } from '@/lib/services/portfolio';
 import { fmtMoney, fmtMinor } from '@/lib/format';
 import { Plus, Download, Upload, ImageIcon } from 'lucide-react';
@@ -27,6 +28,7 @@ export default async function CollectionPage() {
           <a href="/api/collection/export" className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-4 text-sm hover:bg-surface-elevated">
             <Download size={16} /> Export
           </a>
+          <ShareCollection />
         </div>
       </div>
 

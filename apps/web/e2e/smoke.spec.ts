@@ -42,6 +42,28 @@ test('card page shows raw and graded values', async ({ page }) => {
   await expect(page.getByText(/Graded market values/i)).toBeVisible();
 });
 
+test('collection share panel opens and asks demo users to sign in', async ({ page }) => {
+  await page.goto('/app/collection');
+  const shareButton = page.getByRole('button', { name: /^Share$/ });
+  await expect(shareButton).toBeVisible();
+
+  // Retry the click until hydration attaches the handler.
+  await expect(async () => {
+    await shareButton.click();
+    await expect(page.getByText(/Share your collection/i)).toBeVisible({ timeout: 1500 });
+  }).toPass({ timeout: 30_000 });
+
+  // Demo mode: sharing needs a real account — honest sign-in message.
+  await expect(page.getByText(/Sign in to share your collection/i)).toBeVisible({
+    timeout: 10_000,
+  });
+});
+
+test('unknown share links 404 instead of leaking anything', async ({ page }) => {
+  const res = await page.goto('/shared/definitely-not-a-real-slug');
+  expect(res?.status()).toBe(404);
+});
+
 test('card page offers collection tracking (sign-in prompt when signed out)', async ({ page }) => {
   await page.goto('/cards/base1-4');
   await expect(page.getByText(/to track this card in your collection/i)).toBeVisible();

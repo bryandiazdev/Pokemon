@@ -1,5 +1,7 @@
 import 'server-only';
+import { randomBytes } from 'node:crypto';
 import { getServerSupabase } from '../supabase/server';
+import { getAdminSupabase } from '../supabase/admin';
 import { ensureCardPersisted, externalIdsForCards } from './canonical';
 import type { RawCondition, GradingCompany, OwnershipType } from '@psr/types';
 
@@ -173,4 +175,130 @@ export async function deleteCollectionItem(userId: string, itemId: string): Prom
   // RLS also enforces ownership; the explicit user_id filter is belt-and-braces.
   const { error } = await sb.from('collection_items').delete().eq('id', itemId).eq('user_id', userId);
   if (error) throw error;
+}
+
+// ---------- Collection sharing (read-only public links) ----------
+
+export interface ShareState {
+  enabled: boolean;
+  slug: string | null;
+}
+
+export async function getShareState(userId: string): Promise<ShareState> {
+  const sb = await getServerSupabase();
+  if (!sb) return { enabled: false, slug: null };
+  const collectionId = await getOrCreateDefaultCollection(userId);
+  const { data } = await sb
+    .from('collections')
+    .select('visibility, share_slug')
+    .eq('id', collectionId)
+    .single();
+  const enabled = data?.visibility === 'unlisted' && Boolean(data?.share_slug);
+  return { enabled, slug: enabled ? (data!.share_slug as string) : null };
+}
+
+/**
+ * Toggle sharing for the user's default collection. Enabling mints a fresh
+ * unguessable slug; disabling clears it so previously shared links stop
+ * working permanently (privacy-first: no resurrecting an old link by
+ * accident).
+ */
+export async function setShareEnabled(userId: string, enabled: boolean): Promise<ShareState> {
+  const sb = await getServerSupabase();
+  if (!sb) throw new Error('Supabase not configured');
+  const collectionId = await getOrCreateDefaultCollection(userId);
+
+  if (!enabled) {
+    const { error } = await sb
+      .from('collections')
+      .update({ visibility: 'private', share_slug: null })
+      .eq('id', collectionId)
+      .eq('user_id', userId);
+    if (error) throw error;
+    return { enabled: false, slug: null };
+  }
+
+  // 12 URL-safe chars from 9 random bytes — unguessable, short enough to share.
+  const slug = randomBytes(9).toString('base64url');
+  const { error } = await sb
+    .from('collections')
+    .update({ visibility: 'unlisted', share_slug: slug })
+    .eq('id', collectionId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return { enabled: true, slug };
+}
+
+export interface SharedCollection {
+  ownerName: string;
+  collectionName: string;
+  items: CollectionItemRow[];
+}
+
+/**
+ * Resolve a share slug to its collection — public read path (no auth). Uses
+ * the service-role client because the viewer has no session; the slug +
+ * visibility check IS the authorization. Only non-financial fields leave this
+ * function: never expose cost basis or purchase data on a public page.
+ */
+export async function getSharedCollection(slug: string): Promise<SharedCollection | null> {
+  if (!/^[A-Za-z0-9_-]{8,32}$/.test(slug)) return null;
+  const admin = getAdminSupabase();
+  if (!admin) return null;
+
+  const { data: collection } = await admin
+    .from('collections')
+    .select('id, name, user_id, visibility')
+    .eq('share_slug', slug)
+    .maybeSingle();
+  if (!collection || collection.visibility === 'private') return null;
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('display_name')
+    .eq('id', collection.user_id as string)
+    .maybeSingle();
+
+  const { data: rows } = await admin
+    .from('collection_items')
+    .select(
+      'id, card_id, quantity, ownership_type, raw_condition, grading_company, grade, card:cards(name, number, image_small_url, image_large_url, set:sets(name))',
+    )
+    .eq('collection_id', collection.id as string)
+    .order('created_at', { ascending: false });
+
+  const externalMap = await externalIdsForCards((rows ?? []).map((r) => r.card_id as string));
+
+  const items: CollectionItemRow[] = (rows ?? []).map((r) => {
+    const card = (r.card ?? {}) as {
+      name?: string;
+      number?: string;
+      image_small_url?: string;
+      image_large_url?: string;
+      set?: { name?: string };
+    };
+    return {
+      id: r.id as string,
+      cardId: r.card_id as string,
+      cardExternalId: externalMap.get(r.card_id as string) ?? null,
+      name: card.name ?? 'Unknown card',
+      number: card.number ?? null,
+      setName: card.set?.name ?? null,
+      imageUrl: card.image_small_url ?? card.image_large_url ?? null,
+      quantity: r.quantity as number,
+      ownershipType: r.ownership_type as OwnershipType,
+      rawCondition: (r.raw_condition as RawCondition | null) ?? null,
+      gradingCompany: (r.grading_company as GradingCompany | null) ?? null,
+      grade: (r.grade as string | null) ?? null,
+      // Financial fields intentionally zeroed on the public path.
+      purchasePriceMinor: 0,
+      purchaseCurrency: 'USD',
+    };
+  });
+
+  return {
+    ownerName: (profile?.display_name as string | null) ?? 'A collector',
+    collectionName: (collection.name as string) ?? 'My Collection',
+    items,
+  };
 }
