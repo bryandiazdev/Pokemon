@@ -292,6 +292,12 @@ export interface ConsumeResult {
   current: number;
   limit: number | null;
   remaining: number | null;
+  /**
+   * True when metering INFRASTRUCTURE failed (RPC missing/unreachable) rather
+   * than the user being over quota. Callers must never present this as
+   * "you've used all your scans" — that fabricates a quota claim.
+   */
+  infraFailure?: boolean;
 }
 
 /**
@@ -312,19 +318,29 @@ export async function consumeUsage(
     return { allowed: true, current: 0, limit: unlimited ? null : value, remaining: null };
   }
   const supabase = getAdminSupabase();
-  if (!supabase) return { allowed: false, current: 0, limit: unlimited ? null : value, remaining: 0 };
+  const limit = unlimited ? null : value;
+  if (!supabase) {
+    return { allowed: true, current: 0, limit, remaining: null, infraFailure: true };
+  }
 
   const { data, error } = await supabase
     .rpc('consume_usage', { p_user_id: ctx.userId, p_metric: metric, p_limit: limitRaw })
     .maybeSingle();
   if (error || !data) {
-    // Metering infrastructure failure: fail CLOSED for paid-only metrics.
+    // Metering infrastructure failure (e.g. migration not yet applied):
+    // FAIL OPEN, loudly. The pre-flight check* gate already enforced the
+    // limit against best-available usage data, so the only exposure is
+    // uncounted usage during the outage — bricking the core product (and
+    // fabricating "quota exhausted" messages) is far worse. Decision
+    // documented here on purpose.
     // eslint-disable-next-line no-console
-    console.error('[entitlements] consume_usage failed:', error?.message);
-    return { allowed: false, current: 0, limit: unlimited ? null : value, remaining: 0 };
+    console.error(
+      `[entitlements] consume_usage(${metric}) infrastructure failure — usage NOT counted:`,
+      error?.message,
+    );
+    return { allowed: true, current: 0, limit, remaining: null, infraFailure: true };
   }
   const row = data as { allowed: boolean; current_count: number };
-  const limit = unlimited ? null : value;
   return {
     allowed: row.allowed,
     current: row.current_count,

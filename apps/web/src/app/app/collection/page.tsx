@@ -4,9 +4,10 @@ import { Badge, FreshnessBadge } from '@/components/ui/badge';
 import { DataModeBanner } from '@/components/data-mode-banner';
 import { RemoveItemButton } from '@/components/collection/remove-item-button';
 import { ShareCollection } from '@/components/collection/share-collection';
+import { ExportButton } from '@/components/collection/export-button';
 import { getPortfolioSummary } from '@/lib/services/portfolio';
 import { fmtMoney, fmtMinor } from '@/lib/format';
-import { Plus, Download, Upload, ImageIcon } from 'lucide-react';
+import { Plus, Upload, ImageIcon } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Collection' };
@@ -18,16 +19,15 @@ export default async function CollectionPage() {
       <DataModeBanner />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold">Collection</h1>
-        <div className="flex gap-2">
+        {/* flex-wrap: four actions overflow a phone viewport in a single row. */}
+        <div className="flex flex-wrap gap-2">
           <Link href="/app/collection/add" className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-bg hover:bg-accent-strong">
             <Plus size={16} /> Add card
           </Link>
           <Link href="/app/collection/import" className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-4 text-sm hover:bg-surface-elevated">
-            <Upload size={16} /> Import CSV
+            <Upload size={16} /> Import
           </Link>
-          <a href="/api/collection/export" className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-4 text-sm hover:bg-surface-elevated">
-            <Download size={16} /> Export
-          </a>
+          <ExportButton />
           <ShareCollection />
         </div>
       </div>

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Upload } from 'lucide-react';
 
@@ -11,20 +12,28 @@ export default function ImportPage() {
         <p className="text-muted">Upload a CSV, map your columns, preview, then import.</p>
       </div>
       <Card className="space-y-4">
-        <CardTitle>1. Upload your file</CardTitle>
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface-elevated p-8 text-center text-sm text-muted">
-          <Upload size={22} />
-          <span>Drop a CSV here or click to browse</span>
-          <input type="file" accept=".csv" className="hidden" />
-        </label>
-        <ol className="list-inside list-decimal space-y-1 text-sm text-muted">
-          <li>Map columns (card, set, number, quantity, condition, grade, purchase price…).</li>
-          <li>Preview with per-row validation and duplicate detection.</li>
-          <li>Import — large files run as a background job with a downloadable error report.</li>
-        </ol>
-        <p className="text-xs text-muted">
-          The import wizard supports partial imports and rollback. This is a preview in demo mode.
+        <div className="flex items-center gap-2">
+          <Upload size={18} className="text-accent" aria-hidden />
+          <CardTitle>CSV import is coming soon</CardTitle>
+        </div>
+        <p className="text-sm text-muted">
+          The import wizard — column mapping, per-row validation, duplicate detection, and
+          rollback — is in development. Until it ships, you can add cards by{' '}
+          <Link href="/app/scan" className="text-accent hover:underline">
+            scanning them
+          </Link>{' '}
+          or{' '}
+          <Link href="/app/collection/add" className="text-accent hover:underline">
+            searching the catalog
+          </Link>
+          .
         </p>
+        <Link
+          href="/app/collection"
+          className="inline-flex min-h-[42px] w-fit items-center rounded-lg border border-border px-4 text-sm hover:bg-surface-elevated"
+        >
+          Back to collection
+        </Link>
       </Card>
     </div>
   );
