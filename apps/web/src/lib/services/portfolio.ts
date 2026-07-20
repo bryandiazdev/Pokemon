@@ -4,7 +4,7 @@ import { getRegistry } from '../providers';
 import { toUsdPrices } from './fx';
 import { getCard as getCatalogCard } from './catalog';
 import { getCurrentUser } from '../auth';
-import { listCollectionItems } from './collection';
+import { listCollectionItems, type CollectionItemRow } from './collection';
 import {
   money,
   addMoney,
@@ -75,17 +75,29 @@ async function unitValueFor(item: ValuationInput): Promise<Money> {
   const registry = getRegistry();
   try {
     if (item.ownershipType === 'graded' && item.gradingCompany && item.grade) {
-      const graded = await registry.call('gradedPricing', 'getCurrentGradedPrices', (a) =>
-        a.getCurrentGradedPrices({
-          cardExternalId: item.cardExternalId!,
-          gradingCompany: item.gradingCompany!,
-        }),
+      const graded = await registry.call(
+        'gradedPricing',
+        'getCurrentGradedPrices',
+        (a) =>
+          a.getCurrentGradedPrices({
+            cardExternalId: item.cardExternalId!,
+            gradingCompany: item.gradingCompany!,
+          }),
+        // Cached: dashboards, collection, and shared pages all revalue the
+        // same cards; 15 min staleness is fine for display values.
+        {
+          key: `value:graded:${item.cardExternalId}:${item.gradingCompany}`,
+          ttlSeconds: 900,
+        },
       );
       const match = graded.find((g) => g.grade === item.grade) ?? graded[0];
       return money(match?.valueMinor ?? 0, CURRENCY);
     }
-    const rawNative = await registry.call('rawPricing', 'getCurrentRawPrices', (a) =>
-      a.getCurrentRawPrices({ cardExternalId: item.cardExternalId! }),
+    const rawNative = await registry.call(
+      'rawPricing',
+      'getCurrentRawPrices',
+      (a) => a.getCurrentRawPrices({ cardExternalId: item.cardExternalId! }),
+      { key: `value:raw:${item.cardExternalId}`, ttlSeconds: 900 },
     );
     // USD-only app: convert any EUR (Cardmarket) entries before selection so
     // mixed-currency money math can never throw here again.
@@ -156,10 +168,9 @@ async function valueItems(inputs: ValuationInput[]): Promise<ValuedItem[]> {
   return valued;
 }
 
-/** Live inputs from the signed-in user's real collection_items. */
-async function liveInputs(userId: string): Promise<ValuationInput[]> {
-  const items = await listCollectionItems(userId);
-  return items.map((i) => ({
+/** Map a collection row to a valuation input (shared by live + shared views). */
+function rowToInput(i: CollectionItemRow): ValuationInput {
+  return {
     id: i.id,
     cardExternalId: i.cardExternalId,
     name: i.setName ? `${i.name} — ${i.setName}` : i.name,
@@ -176,7 +187,22 @@ async function liveInputs(userId: string): Promise<ValuationInput[]> {
         : i.rawCondition
           ? conditionLabel(i.rawCondition)
           : null,
-  }));
+  };
+}
+
+/** Live inputs from the signed-in user's real collection_items. */
+async function liveInputs(userId: string): Promise<ValuationInput[]> {
+  const items = await listCollectionItems(userId);
+  return items.map(rowToInput);
+}
+
+/**
+ * Value arbitrary collection rows at current market prices (used by the
+ * public shared-collection page). Purchase data on the rows is expected to be
+ * zeroed by the caller for public views — only market values leave this path.
+ */
+export async function valueCollectionRows(rows: CollectionItemRow[]): Promise<ValuedItem[]> {
+  return valueItems(rows.map(rowToInput));
 }
 
 /** Demo inputs from the seeded fixtures. */
