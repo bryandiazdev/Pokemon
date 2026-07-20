@@ -128,13 +128,20 @@ export function ShareCollection() {
         </button>
 
         {enabled && url && (
+          // min-w-0: without it this flex item can't shrink below the URL's
+          // intrinsic width, so truncate never engages and the chip overflows
+          // the screen on mobile.
           <button
             type="button"
             onClick={copy}
-            className="inline-flex min-h-[38px] max-w-full items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-3 text-xs text-accent"
+            className="inline-flex min-h-[38px] w-full min-w-0 max-w-full items-center gap-1.5 overflow-hidden rounded-lg border border-accent/40 bg-accent/10 px-3 text-xs text-accent sm:w-auto"
           >
-            {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
-            <span className="truncate font-mono">{copied ? 'Copied!' : url}</span>
+            {copied ? (
+              <Check size={13} className="shrink-0" aria-hidden />
+            ) : (
+              <Copy size={13} className="shrink-0" aria-hidden />
+            )}
+            <span className="min-w-0 truncate font-mono">{copied ? 'Copied!' : url}</span>
           </button>
         )}
       </div>
