@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Confirm your email — Pokémon Stock Radar</title>
+    <!--
+      Supabase "Confirm signup" template.
+      Variables: {{ .ConfirmationURL }} — the one-time confirmation link.
+      Local dev: wired via supabase/config.toml [auth.email.template.confirmation].
+      Hosted:   paste into Dashboard → Authentication → Emails → Confirm signup.
+    -->
+  </head>
+  <body style="margin:0; padding:0; background-color:#06070b; -webkit-text-size-adjust:100%;">
+    <!-- Preheader: shows next to the subject line in inboxes, invisible in the body. -->
+    <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+      One tap to activate your collection — scan, grade-check, and track your cards.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#06070b" style="background-color:#06070b;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+            <!-- Wordmark -->
+            <tr>
+              <td align="center" style="padding:0 0 24px 0;">
+                <div style="font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:13px; letter-spacing:3px; color:#e6edf3;">
+                  <span style="color:#38e2c5;">◎</span>&nbsp;&nbsp;POKÉMON&nbsp;STOCK&nbsp;RADAR
+                </div>
+              </td>
+            </tr>
+
+            <!-- Card -->
+            <tr>
+              <td bgcolor="#11131c" style="background-color:#11131c; border:1px solid #252d38; border-radius:14px; padding:36px 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                  <tr>
+                    <td style="font-family:Georgia, 'Times New Roman', serif; font-size:26px; line-height:1.25; color:#e6edf3; padding-bottom:14px;">
+                      Confirm your email
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:15px; line-height:1.6; color:#93a1b0; padding-bottom:28px;">
+                      You're one tap away from your collection. Confirm this address
+                      and start scanning cards, checking grade potential, and tracking
+                      what your collection is really worth.
+                    </td>
+                  </tr>
+
+                  <!-- Button -->
+                  <tr>
+                    <td align="center" style="padding-bottom:28px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td bgcolor="#38e2c5" style="background-color:#38e2c5; border-radius:10px;">
+                            <a href="{{ .ConfirmationURL }}"
+                               style="display:inline-block; padding:14px 32px; font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:15px; font-weight:bold; color:#061412; text-decoration:none; border-radius:10px;">
+                              Confirm email &amp; start scanning
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <!-- Fallback link -->
+                  <tr>
+                    <td style="font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:12px; line-height:1.6; color:#93a1b0; padding-bottom:24px;">
+                      If the button doesn't work, paste this link into your browser:
+                      <br />
+                      <a href="{{ .ConfirmationURL }}" style="color:#38e2c5; word-break:break-all; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                    </td>
+                  </tr>
+
+                  <!-- Divider -->
+                  <tr>
+                    <td style="border-top:1px solid #252d38; padding-top:20px; font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:12px; line-height:1.6; color:#93a1b0;">
+                      This link is single-use and expires soon. If it has expired,
+                      sign in again to request a fresh one.
+                      <br /><br />
+                      Didn't create a Pokémon Stock Radar account? You can safely
+                      ignore this email — nothing happens without confirmation.
+                    </td>
+                  </tr>
+
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td align="center" style="padding:24px 8px 0 8px;">
+                <div style="font-family:'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size:11px; line-height:1.6; color:#5c6875;">
+                  Scan it. Grade-check it. Track it.
+                  <br /><br />
+                  Pokémon and all related names are trademarks of Nintendo,
+                  The Pokémon Company, Game Freak, and Creatures Inc.
+                  Pokémon Stock Radar is an independent tool and is not affiliated
+                  with, endorsed, sponsored, or approved by them, or by PSA,
+                  Beckett, CGC, SGC, TAG, ACE, or any pricing/data provider.
+                  Grade estimates are never guarantees.
+                </div>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

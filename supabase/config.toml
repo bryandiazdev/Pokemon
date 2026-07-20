@@ -227,6 +227,12 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Branded signup-confirmation email (local dev). For the hosted project, paste
+# the same file into Dashboard -> Authentication -> Emails -> Confirm signup.
+[auth.email.template.confirmation]
+subject = "Confirm your email — Pokémon Stock Radar"
+content_path = "./supabase/templates/confirm-signup.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
