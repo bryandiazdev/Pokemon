@@ -1,23 +1,19 @@
 -- 0013_billing_v2.sql
 -- Purpose: three-tier billing (free / collector / pro), Stripe customer linkage,
 -- and race-safe usage metering functions.
+-- REQUIRES: 0013_billing_enums.sql (the 'collector'/'pro' plan_tier values
+-- must be committed before this file references them — Postgres forbids using
+-- a new enum value inside the transaction that added it).
 -- ROLLBACK: drop function consume_usage, release_usage, current_usage;
 --           alter table profiles drop column stripe_customer_id;
---           (enum values cannot be removed without a type rebuild)
 
--- 1. New plan tiers. 'collector_pro' remains for historical rows; new writes
---    use 'collector' and 'pro'. (psql runs these in autocommit, so the added
---    values are usable by later statements in this file.)
-alter type plan_tier add value if not exists 'collector';
-alter type plan_tier add value if not exists 'pro';
-
--- 2. Stripe customer linkage on the profile (created before any subscription
+-- 1. Stripe customer linkage on the profile (created before any subscription
 --    exists, so checkout can reuse the same customer across attempts).
 alter table profiles add column if not exists stripe_customer_id text;
 create unique index if not exists uq_profiles_stripe_customer_id
   on profiles(stripe_customer_id) where stripe_customer_id is not null;
 
--- 3. Migrate legacy tier + refresh Free defaults to the launch catalog
+-- 2. Migrate legacy tier + refresh Free defaults to the launch catalog
 --    (free: 100 cards, 25 scans/mo, 0 AI grade checks, 0 alerts, 30d history).
 update entitlements set plan = 'collector' where plan = 'collector_pro';
 
@@ -32,7 +28,7 @@ update entitlements
        grade_scan_monthly_limit = 0
  where plan = 'free';
 
--- 4. Race-safe monthly usage metering. Periods are UTC calendar months.
+-- 3. Race-safe monthly usage metering. Periods are UTC calendar months.
 --    consume_usage RESERVES one unit atomically: the conditional UPDATE is a
 --    single statement, so two concurrent requests can never both pass a
 --    limit-1 check (one of them sees the incremented row). release_usage
