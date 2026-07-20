@@ -214,14 +214,28 @@ export const POST = withErrorHandling(async (req: Request) => {
 
   const setExternalId = await resolveSetExternalId(ocr.setName ?? null, setTotal);
 
-  const result = await getRegistry().call('recognition', 'identifyCard', (a) =>
-    a.identifyCard({
-      imageRef: parsed.value.imageRef,
-      ocr,
-      language: visionLanguage,
-      setExternalId,
-    }),
-  );
+  let result;
+  try {
+    result = await getRegistry().call('recognition', 'identifyCard', (a) =>
+      a.identifyCard({
+        imageRef: parsed.value.imageRef,
+        ocr,
+        language: visionLanguage,
+        setExternalId,
+      }),
+    );
+  } catch (err) {
+    // Catalog lookup infrastructure failed (timeout/rate limit). The card was
+    // read fine — refund the reserved scan and say so honestly instead of
+    // pretending the card has no match.
+    await releaseUsage(ctx, 'quick_scan');
+    // eslint-disable-next-line no-console
+    console.error('[scan/identify] recognition lookup failed:', err);
+    return jsonError(
+      'provider_unavailable',
+      `The card catalog is busy right now — "${ocr.name ?? ocr.number}" was read fine, so just try again in a moment.`,
+    );
+  }
 
   const top = result.candidates[0];
   const requiresConfirmation =

@@ -100,7 +100,17 @@ export function buildRegistry(
   }
 
   registry.setPrimary(primary);
-  // Demo fixtures are always available as a last-resort fallback in non-prod.
-  registry.addFallback(demo);
+  // Demo fixtures remain a last-resort fallback for DATA capabilities
+  // (pricing, population…), where clearly-labeled sample data beats a dead
+  // page. Recognition is deliberately EXCLUDED when a live scanner is
+  // configured: falling back would present fixture cards as scan candidates
+  // for a user's real card — a confidently wrong answer. Better to fail the
+  // scan with a retry message than to fabricate matches.
+  if (config.recognition === 'demo') {
+    registry.addFallback(demo);
+  } else {
+    const { recognition: _liveOnly, ...demoDataFallback } = demo;
+    registry.addFallback(demoDataFallback);
+  }
   return registry;
 }
