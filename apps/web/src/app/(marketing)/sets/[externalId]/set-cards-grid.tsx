@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, ImageIcon } from 'lucide-react';
+import { Loader2, ImageIcon, Check } from 'lucide-react';
 import type { NormalizedCard } from '@psr/providers';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,13 +11,17 @@ type SetCardsGridProps = {
   setExternalId: string;
   initialCards: NormalizedCard[];
   initialCursor: string | null;
+  /** External ids of cards the signed-in user owns (empty when signed out). */
+  ownedExternalIds?: string[];
 };
 
 export function SetCardsGrid({
   setExternalId,
   initialCards,
   initialCursor,
+  ownedExternalIds = [],
 }: SetCardsGridProps) {
+  const owned = useMemo(() => new Set(ownedExternalIds), [ownedExternalIds]);
   const [cards, setCards] = useState(initialCards);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [loading, setLoading] = useState(false);
@@ -77,38 +81,55 @@ export function SetCardsGrid({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        {cards.map((card) => (
-          <Link key={card.externalId} href={`/cards/${card.externalId}`}>
-            <Card className="flex h-full flex-col transition-colors hover:border-accent/50">
-              <div className="flex aspect-[2.5/3.5] items-center justify-center rounded-lg bg-bg-deep/50 p-1.5">
-                {card.imageSmallUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={card.imageSmallUrl}
-                    alt={`${card.name} #${card.number}`}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full rounded-md object-contain"
-                  />
-                ) : (
-                  <span className="flex flex-col items-center gap-1.5 text-faint">
-                    <ImageIcon size={24} aria-hidden />
-                    <span className="text-[11px]">No image</span>
-                  </span>
-                )}
-              </div>
-              <div className="mt-2.5 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate text-sm font-medium sm:text-base">{card.name}</h3>
-                  <p className="text-xs text-muted">#{card.number}</p>
+        {cards.map((card) => {
+          const isOwned = owned.has(card.externalId);
+          return (
+            <Link key={card.externalId} href={`/cards/${card.externalId}`}>
+              <Card
+                className={`flex h-full flex-col transition-colors ${
+                  isOwned
+                    ? 'border-positive/40 hover:border-positive/70'
+                    : 'hover:border-accent/50'
+                }`}
+              >
+                <div className="relative flex aspect-[2.5/3.5] items-center justify-center rounded-lg bg-bg-deep/50 p-1.5">
+                  {card.imageSmallUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={card.imageSmallUrl}
+                      alt={`${card.name} #${card.number}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full rounded-md object-contain"
+                    />
+                  ) : (
+                    <span className="flex flex-col items-center gap-1.5 text-faint">
+                      <ImageIcon size={24} aria-hidden />
+                      <span className="text-[11px]">No image</span>
+                    </span>
+                  )}
+                  {isOwned && (
+                    <span
+                      className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-positive px-2 py-0.5 text-[10px] font-semibold text-bg shadow-md"
+                      title="In your collection"
+                    >
+                      <Check size={11} strokeWidth={3} aria-hidden /> Owned
+                    </span>
+                  )}
                 </div>
-                {card.rarity && (
-                  <Badge className="hidden max-w-[40%] truncate sm:inline-flex">{card.rarity}</Badge>
-                )}
-              </div>
-            </Card>
-          </Link>
-        ))}
+                <div className="mt-2.5 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-medium sm:text-base">{card.name}</h3>
+                    <p className="text-xs text-muted">#{card.number}</p>
+                  </div>
+                  {card.rarity && (
+                    <Badge className="hidden max-w-[40%] truncate sm:inline-flex">{card.rarity}</Badge>
+                  )}
+                </div>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
       <div ref={sentinelRef} className="flex min-h-10 flex-col items-center justify-center gap-2 py-2">

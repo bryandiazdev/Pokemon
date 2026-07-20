@@ -169,6 +169,37 @@ export async function listCollectionItems(userId: string): Promise<CollectionIte
   }
 }
 
+/**
+ * Distinct external ids of every card the user owns (any condition/grade).
+ * Lightweight — used to badge "owned" cards in set browsing, so it must never
+ * fail a catalog page: errors degrade to an empty list.
+ */
+export async function listOwnedCardExternalIds(userId: string): Promise<string[]> {
+  try {
+    const sb = await getServerSupabase();
+    if (!sb) return [];
+    const { data, error } = await sb
+      .from('collection_items')
+      .select('card_id')
+      .eq('user_id', userId);
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error('[collection] listOwnedCardExternalIds failed:', error.message);
+      return [];
+    }
+    const cardIds = [...new Set((data ?? []).map((r) => r.card_id as string))];
+    if (cardIds.length === 0) return [];
+    const externalMap = await externalIdsForCards(cardIds);
+    return cardIds
+      .map((id) => externalMap.get(id))
+      .filter((id): id is string => Boolean(id));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[collection] listOwnedCardExternalIds threw:', err);
+    return [];
+  }
+}
+
 export async function deleteCollectionItem(userId: string, itemId: string): Promise<void> {
   const sb = await getServerSupabase();
   if (!sb) throw new Error('Supabase not configured');
