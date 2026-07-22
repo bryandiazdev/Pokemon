@@ -94,7 +94,14 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (err) {
-      this.onFailure(err);
+      // A not_found is a valid ANSWER ("this card has no pricing"), not
+      // provider unhealth — the provider responded. Counting it would let a
+      // run of unpriced cards open the breaker and poison healthy lookups.
+      if (isProviderError(err) && err.code === 'not_found') {
+        this.onSuccess();
+      } else {
+        this.onFailure(err);
+      }
       throw err;
     }
   }

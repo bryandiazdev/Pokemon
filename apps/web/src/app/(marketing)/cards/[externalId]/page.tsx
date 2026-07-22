@@ -99,7 +99,11 @@ export default async function CardPage({ params }: Params) {
   const anyConverted = [...rawByCondition.values()].some((p) => p.fxConverted);
   const nm = rawByCondition.get('near_mint');
   const psa10 = pricing.graded.find((g) => g.gradingCompany === 'psa' && g.grade === '10');
-  const multiplier = nm && psa10 ? (psa10.valueMinor / nm.valueMinor).toFixed(1) : null;
+  // Only compare like with like: a demo-fixture PSA 10 against a live raw
+  // price yields nonsense multipliers (e.g. "a PSA 10 is 0.2× raw").
+  const comparable =
+    nm && psa10 && (nm.freshness === 'demo') === (psa10.freshness === 'demo');
+  const multiplier = comparable ? (psa10!.valueMinor / nm!.valueMinor).toFixed(1) : null;
   const premium = /rare|holo|illustration|special|secret|\bex\b|full art/i.test(card.rarity ?? '');
 
   return (

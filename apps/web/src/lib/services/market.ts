@@ -1,7 +1,7 @@
 import 'server-only';
 import { getRegistry } from '../providers';
 import { listSets, getSet, getCardsInSet } from './catalog';
-import { toUsdPoints } from './fx';
+import { toUsdPoints, toUsdPrices } from './fx';
 import type { NormalizedCard, NormalizedPricePoint } from '@psr/providers';
 import type { DataFreshness } from '@psr/types';
 
@@ -113,16 +113,45 @@ export interface CardPulse {
 }
 
 /**
- * Current USD value + 7-day change for one card, from its Cardmarket average
- * history. Shared by the market overview and the watchlist; per-card history
- * is cached, so the two features share one provider fetch. Null = no usable
- * data.
+ * Current USD value + 7-day change for one card. Shared by the market
+ * overview and the watchlist.
+ *
+ * The VALUE uses the same source + selection as the card detail page and
+ * portfolio valuation (current raw prices, native-USD TCGplayer preferred,
+ * Near Mint) so a card never shows different prices on different pages. The
+ * CHANGE comes from Cardmarket rolling averages — the only genuine history
+ * the provider carries. Both lookups are cached (the value cache is shared
+ * with portfolio valuation). Null = no usable data.
  */
 export async function getCardPulse(cardExternalId: string): Promise<CardPulse | null> {
+  const registry = getRegistry();
+
+  // Current value — identical source to the card page's Near Mint tile.
+  let valueMinor: number | null = null;
+  let freshness: DataFreshness = 'live';
+  try {
+    const rawNative = await registry.call(
+      'rawPricing',
+      'getCurrentRawPrices',
+      (a) => a.getCurrentRawPrices({ cardExternalId }),
+      { key: `value:raw:${cardExternalId}`, ttlSeconds: 900 },
+    );
+    const raw = await toUsdPrices(rawNative);
+    const native = raw.filter((r) => !r.fxConverted);
+    const pool = native.length > 0 ? native : raw;
+    const match = pool.find((r) => r.condition === 'near_mint') ?? pool[0];
+    if (match) {
+      valueMinor = match.valueMinor;
+      freshness = match.freshness ?? 'live';
+    }
+  } catch {
+    // No current prices (not_found etc.) — fall back to the history below.
+  }
+
   try {
     const to = new Date();
     const from = new Date(to.getTime() - 31 * 86_400_000);
-    const native = await getRegistry().call(
+    const native = await registry.call(
       'rawPricing',
       'getRawPriceHistory',
       (a) =>
@@ -133,14 +162,11 @@ export async function getCardPulse(cardExternalId: string): Promise<CardPulse | 
         }),
       { key: `market:hist:${cardExternalId}`, ttlSeconds: 3600 },
     );
-    if (native.length === 0) return null;
     const points = (await toUsdPoints(native)).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Current value must be a recent observation, not a month-old average.
     const nowMs = to.getTime();
     const ageDays = (p: NormalizedPricePoint) => (nowMs - new Date(p.date).getTime()) / 86_400_000;
-    const current = points[points.length - 1]!;
-    if (ageDays(current) > 3) return null;
+    const current = points[points.length - 1];
 
     // 7-day baseline: the observation nearest 7 days old, within a 5–10 day
     // window. Outside that window the "7-day change" label would be a lie.
@@ -148,18 +174,22 @@ export async function getCardPulse(cardExternalId: string): Promise<CardPulse | 
       .filter((p) => ageDays(p) >= 5 && ageDays(p) <= 10)
       .sort((a, b) => Math.abs(ageDays(a) - 7) - Math.abs(ageDays(b) - 7))[0];
     const changePct =
-      baseline && baseline.valueMinor > 0
+      current && baseline && baseline.valueMinor > 0 && ageDays(current) <= 3
         ? ((current.valueMinor - baseline.valueMinor) / baseline.valueMinor) * 100
         : null;
 
-    return {
-      valueMinor: current.valueMinor,
-      changePct,
-      freshness: current.freshness ?? 'live',
-    };
+    // No current-price source: fall back to the latest history observation,
+    // but only when it's recent enough to honestly call "current".
+    if (valueMinor === null && current && ageDays(current) <= 3) {
+      valueMinor = current.valueMinor;
+      freshness = current.freshness ?? 'live';
+    }
+
+    if (valueMinor === null) return null;
+    return { valueMinor, changePct, freshness };
   } catch {
-    // One unpriceable card must never break a page.
-    return null;
+    // History unavailable — a value alone is still useful.
+    return valueMinor === null ? null : { valueMinor, changePct: null, freshness };
   }
 }
 
