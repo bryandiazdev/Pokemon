@@ -16,8 +16,10 @@ import { fmtMinor } from '@/lib/format';
 import { RAW_CONDITIONS, type RawCondition } from '@psr/types';
 import { getCurrentUser } from '@/lib/auth';
 import { listCollectionItems } from '@/lib/services/collection';
+import { isWatched } from '@/lib/services/watchlist';
 import { CollectionActions, type OwnedCopy } from '@/components/card/collection-actions';
-import { ScanLine, Eye, Bell } from 'lucide-react';
+import { WatchButton } from '@/components/card/watch-button';
+import { ScanLine } from 'lucide-react';
 
 interface Params {
   params: Promise<{ externalId: string }>;
@@ -63,10 +65,12 @@ export default async function CardPage({ params }: Params) {
   // Signed-in users see (and can manage) their copies of this card.
   let signedIn = false;
   let owned: OwnedCopy[] = [];
+  let watched = false;
   try {
     const user = await getCurrentUser();
     signedIn = Boolean(user && !user.isDemo);
     if (signedIn) {
+      watched = await isWatched(user!.id, externalId);
       const items = await listCollectionItems(user!.id);
       owned = items
         .filter((i) => i.cardExternalId === externalId)
@@ -130,20 +134,11 @@ export default async function CardPage({ params }: Params) {
             >
               <ScanLine size={15} /> Scan copy
             </Link>
-            <Link
-              href="/app/watchlist"
-              className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-border px-3 text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
-              aria-label="Add to watchlist"
-            >
-              <Eye size={15} />
-            </Link>
-            <Link
-              href="/app/alerts"
-              className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-border px-3 text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
-              aria-label="Create price alert"
-            >
-              <Bell size={15} />
-            </Link>
+            <WatchButton
+              cardExternalId={externalId}
+              signedIn={signedIn}
+              initialWatched={watched}
+            />
           </div>
           <CollectionActions
             cardExternalId={externalId}

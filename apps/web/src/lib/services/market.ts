@@ -105,11 +105,20 @@ interface PricedCard {
   freshness: DataFreshness;
 }
 
-/** Price one card from its Cardmarket average history. Null = no usable data. */
-async function priceCard(
-  card: NormalizedCard,
-  setName: string | null,
-): Promise<PricedCard | null> {
+export interface CardPulse {
+  valueMinor: number;
+  /** 7-day % change; null when no ~7-day-old observation exists. */
+  changePct: number | null;
+  freshness: DataFreshness;
+}
+
+/**
+ * Current USD value + 7-day change for one card, from its Cardmarket average
+ * history. Shared by the market overview and the watchlist; per-card history
+ * is cached, so the two features share one provider fetch. Null = no usable
+ * data.
+ */
+export async function getCardPulse(cardExternalId: string): Promise<CardPulse | null> {
   try {
     const to = new Date();
     const from = new Date(to.getTime() - 31 * 86_400_000);
@@ -118,11 +127,11 @@ async function priceCard(
       'getRawPriceHistory',
       (a) =>
         a.getRawPriceHistory({
-          cardExternalId: card.externalId,
+          cardExternalId,
           from: from.toISOString().slice(0, 10),
           to: to.toISOString().slice(0, 10),
         }),
-      { key: `market:hist:${card.externalId}`, ttlSeconds: 3600 },
+      { key: `market:hist:${cardExternalId}`, ttlSeconds: 3600 },
     );
     if (native.length === 0) return null;
     const points = (await toUsdPoints(native)).sort((a, b) => a.date.localeCompare(b.date));
@@ -144,16 +153,24 @@ async function priceCard(
         : null;
 
     return {
-      card,
-      setName,
       valueMinor: current.valueMinor,
       changePct,
       freshness: current.freshness ?? 'live',
     };
   } catch {
-    // One unpriceable card must never break the market page.
+    // One unpriceable card must never break a page.
     return null;
   }
+}
+
+/** Price one card from its Cardmarket average history. Null = no usable data. */
+async function priceCard(
+  card: NormalizedCard,
+  setName: string | null,
+): Promise<PricedCard | null> {
+  const pulse = await getCardPulse(card.externalId);
+  if (!pulse) return null;
+  return { card, setName, ...pulse };
 }
 
 function toMover(p: PricedCard): Mover {
