@@ -57,7 +57,7 @@ export interface AlertRow {
   userId: string;
   cardExternalId: string;
   direction: 'above' | 'below' | 'pct_increase' | 'pct_decrease';
-  threshold?: number; // major units (e.g. dollars)
+  threshold?: number; // minor units (cents) — matches the price_alerts column
   percentageChange?: number; // percent
   condition?: RawCondition;
   gradingCompany?: GradingCompany;

@@ -34,9 +34,9 @@ export function shouldTrigger(
   if (currentMinor == null) return false;
   switch (alert.direction) {
     case 'above':
-      return alert.threshold != null && currentMinor >= alert.threshold * 100;
+      return alert.threshold != null && currentMinor >= alert.threshold;
     case 'below':
-      return alert.threshold != null && currentMinor <= alert.threshold * 100;
+      return alert.threshold != null && currentMinor <= alert.threshold;
     case 'pct_increase': {
       if (priorMinor == null || priorMinor === 0 || alert.percentageChange == null) return false;
       return ((currentMinor - priorMinor) / priorMinor) * 100 >= alert.percentageChange;
@@ -109,11 +109,12 @@ export async function runAlertEvaluation(deps: JobDeps): Promise<AlertEvaluation
 
 function describeAlert(alert: AlertRow, currentMinor: number): string {
   const value = `$${(currentMinor / 100).toFixed(2)}`;
+  const target = alert.threshold != null ? `$${(alert.threshold / 100).toFixed(2)}` : '';
   switch (alert.direction) {
     case 'above':
-      return `Now ${value}, at or above your $${alert.threshold} target.`;
+      return `Now ${value}, at or above your ${target} target.`;
     case 'below':
-      return `Now ${value}, at or below your $${alert.threshold} target.`;
+      return `Now ${value}, at or below your ${target} target.`;
     case 'pct_increase':
       return `Up at least ${alert.percentageChange}% — now ${value}.`;
     case 'pct_decrease':

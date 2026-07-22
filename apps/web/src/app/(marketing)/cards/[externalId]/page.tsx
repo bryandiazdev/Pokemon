@@ -19,7 +19,7 @@ import { listCollectionItems } from '@/lib/services/collection';
 import { isWatched } from '@/lib/services/watchlist';
 import { CollectionActions, type OwnedCopy } from '@/components/card/collection-actions';
 import { WatchButton } from '@/components/card/watch-button';
-import { ScanLine } from 'lucide-react';
+import { ScanLine, Bell } from 'lucide-react';
 
 interface Params {
   params: Promise<{ externalId: string }>;
@@ -143,6 +143,14 @@ export default async function CardPage({ params }: Params) {
               signedIn={signedIn}
               initialWatched={watched}
             />
+            <Link
+              href={`/app/alerts?card=${encodeURIComponent(externalId)}`}
+              className="inline-flex min-h-[42px] items-center justify-center rounded-lg border border-border px-3 text-sm transition-colors hover:border-border-strong hover:bg-surface-elevated"
+              aria-label="Create price alert"
+              title="Create price alert"
+            >
+              <Bell size={15} aria-hidden />
+            </Link>
           </div>
           <CollectionActions
             cardExternalId={externalId}

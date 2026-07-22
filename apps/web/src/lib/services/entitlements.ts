@@ -136,7 +136,8 @@ async function readUsage(userId: string): Promise<UsageSnapshot> {
     supabase
       .from('price_alerts')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId),
+      .eq('user_id', userId)
+      .eq('enabled', true),
     supabase
       .from('collection_items')
       .select('id', { count: 'exact', head: true })

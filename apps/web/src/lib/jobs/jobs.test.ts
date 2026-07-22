@@ -120,7 +120,7 @@ describe('alert evaluation job', () => {
       userId: 'u',
       cardExternalId: 'c',
       direction: 'above',
-      threshold: 100,
+      threshold: 10000, // $100.00 in minor units
       cadence: 'immediate',
       enabled: true,
     };

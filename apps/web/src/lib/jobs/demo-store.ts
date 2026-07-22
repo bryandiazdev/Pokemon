@@ -33,7 +33,7 @@ export class DemoJobStore implements JobStore {
           userId: DEMO_USER.id,
           cardExternalId: 'base1-4',
           direction: 'above',
-          threshold: 100, // $100 — demo Charizard NM is well above this, so it triggers
+          threshold: 10000, // $100.00 (minor units) — demo Charizard NM is well above this, so it triggers
           cadence: 'daily',
           enabled: true,
         },
@@ -42,7 +42,7 @@ export class DemoJobStore implements JobStore {
           userId: DEMO_USER.id,
           cardExternalId: 'sv4pt5-193',
           direction: 'below',
-          threshold: 10, // $10 — demo Mew ex NM is above this, so it does NOT trigger
+          threshold: 1000, // $10.00 (minor units) — demo Mew ex NM is above this, so it does NOT trigger
           cadence: 'daily',
           enabled: true,
         },
