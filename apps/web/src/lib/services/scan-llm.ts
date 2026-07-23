@@ -155,6 +155,205 @@ function normalizeIdentification(
   };
 }
 
+// ---------- Batch (multi-card) identification ----------
+
+export interface LlmBatchCard {
+  /** Where in the photo this card sits, e.g. "top-left", "row 2, col 3". */
+  position: string | null;
+  name: string | null;
+  number: string | null;
+  setName: string | null;
+  setTotal: string | null;
+  language: string | null;
+  confidence: number;
+}
+
+const batchCardSchema = z.object({
+  position: z.string().nullable(),
+  name: z.string().nullable(),
+  number: z.string().nullable(),
+  setName: z.string().nullable(),
+  setTotal: z.string().nullable(),
+  language: z.string().nullable(),
+  confidence: z.number(),
+});
+const batchSchema = z.object({ cards: z.array(batchCardSchema) });
+
+const BATCH_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['cards'],
+  properties: {
+    cards: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['position', 'name', 'number', 'setName', 'setTotal', 'language', 'confidence'],
+        properties: {
+          position: nullableString,
+          name: nullableString,
+          number: nullableString,
+          setName: nullableString,
+          setTotal: nullableString,
+          language: nullableString,
+          confidence: { type: 'number' },
+        },
+      },
+    },
+  },
+} as const;
+
+const BATCH_SYSTEM_PROMPT = `You read photos containing MULTIPLE Pokémon TCG cards (binder pages, spreads on a table, grids) and transcribe each card's printed identifying text with maximum accuracy.
+
+Rules:
+- Find EVERY distinct, sufficiently visible Pokémon card in the photo. Report one entry per physical card. Skip card backs, sleeves without cards, and anything that is not a Pokémon card. Do not report the same card twice.
+- position: a short human description of where the card sits, reading left-to-right, top-to-bottom — e.g. "top-left", "row 1, col 2", "bottom-right".
+- For EACH card, transcribe the NAME exactly as printed at the top. Preserve suffixes and their exact casing: "ex" (lowercase, modern) vs "EX" (uppercase, older), "GX", "V", "VMAX", "VSTAR", "BREAK", "Radiant", "Shining", owner prefixes ("Team Rocket's"), and forms ("Alolan", "Galarian"). Do not add words that are not printed.
+- The COLLECTOR NUMBER is printed small near the bottom, usually "N/M" (e.g. "4/102", "058/165", "GG44/GG70") or a promo code ("SVP 044", "SWSH244"). Report only the part BEFORE the slash, keeping any letter prefix exactly. Strip leading zeros from purely numeric values ("058" → "58"). If it is too small to read reliably, use null — never guess.
+- setTotal: the part AFTER the slash if legible, digits only; else null.
+- setName: only when actually printed/legible; otherwise null. Never guess.
+- language: ISO 639-1 code of each card's printed language.
+- confidence: your honest 0..1 confidence in that card's NAME transcription. Cards that are partially cut off, blurry, or at extreme angles get low confidence.
+- Order the cards reading left-to-right, top-to-bottom.`;
+
+/**
+ * Detect and read EVERY card in one photo. Returns an array ordered
+ * left-to-right, top-to-bottom (possibly empty when no cards are visible).
+ * Throws on API/parse failures.
+ */
+export async function identifyCardsInPhoto(image: ScanImage, maxCards: number): Promise<LlmBatchCard[]> {
+  const provider = visionScanProvider();
+  if (!provider) throw new Error('No vision provider configured (set ANTHROPIC_API_KEY).');
+  const raw =
+    provider === 'anthropic'
+      ? await batchIdentifyWithClaude(image)
+      : await batchIdentifyWithOpenAI(image);
+
+  return raw.slice(0, maxCards).map((c) => {
+    const single = normalizeIdentification({ isPokemonCard: true, ...c }, 'batch');
+    return {
+      position: c.position?.trim() || null,
+      name: single?.name ?? null,
+      number: single?.number ?? null,
+      setName: single?.setName ?? null,
+      setTotal: single?.setTotal ?? null,
+      language: single?.language ?? null,
+      confidence: Math.max(0, Math.min(1, c.confidence)),
+    };
+  });
+}
+
+async function batchIdentifyWithClaude(image: ScanImage): Promise<z.infer<typeof batchCardSchema>[]> {
+  const model = env.ANTHROPIC_SCAN_MODEL || 'claude-opus-4-8';
+  const client = getAnthropic();
+  const parsedImg = parseDataUrl(image.dataUrl);
+  if (!parsedImg) throw new Error('Undecodable image provided');
+
+  const response = await client.messages
+    .create({
+      model,
+      max_tokens: 4096,
+      system: BATCH_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: parsedImg.mediaType, data: parsedImg.data },
+            },
+            {
+              type: 'text',
+              text: 'Identify every Pokémon card visible in this photo. Return the identifications as JSON.',
+            },
+          ],
+        },
+      ],
+      output_config: { format: { type: 'json_schema', schema: BATCH_JSON_SCHEMA } },
+    })
+    .catch(rethrowAnthropic);
+
+  const text = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text;
+  if (response.stop_reason === 'refusal' || !text) {
+    throw new Error('Claude returned no identifications for this image.');
+  }
+  const parsed = batchSchema.safeParse(JSON.parse(text));
+  if (!parsed.success) {
+    // eslint-disable-next-line no-console
+    console.error('[scan-llm] Claude batch schema mismatch', parsed.error.flatten());
+    throw new Error('Claude returned an unexpected batch shape.');
+  }
+  return parsed.data.cards;
+}
+
+const OPENAI_BATCH_SUFFIX = `
+Return JSON exactly:
+{
+  "cards": [
+    {
+      "position": "top-left" | null,
+      "name": "printed card name" | null,
+      "number": "collector number before the slash" | null,
+      "setName": "printed set name" | null,
+      "setTotal": "total after the slash, digits only" | null,
+      "language": "two-letter code" | null,
+      "confidence": 0-1
+    }
+  ]
+}
+One entry per visible card, left-to-right then top-to-bottom. Respond with ONLY valid JSON.`;
+
+async function batchIdentifyWithOpenAI(image: ScanImage): Promise<z.infer<typeof batchCardSchema>[]> {
+  const model = env.OPENAI_SCAN_MODEL || 'gpt-4o';
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: BATCH_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Identify every Pokémon card visible in this photo.' + OPENAI_BATCH_SUFFIX,
+            },
+            { type: 'image_url', image_url: { url: image.dataUrl, detail: 'high' } },
+          ],
+        },
+      ],
+      max_tokens: 2000,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    // eslint-disable-next-line no-console
+    console.error('[scan-llm] OpenAI batch error', res.status, detail.slice(0, 500));
+    throw new Error(`OpenAI batch request failed (${res.status}).`);
+  }
+  const body = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>;
+  };
+  const text = body.choices?.[0]?.message?.content;
+  if (!text) throw new Error('OpenAI returned an empty batch response.');
+  const parsed = batchSchema.safeParse(extractJson(text));
+  if (!parsed.success) {
+    // eslint-disable-next-line no-console
+    console.error('[scan-llm] OpenAI batch schema mismatch', parsed.error.flatten());
+    throw new Error('OpenAI returned an unexpected batch shape.');
+  }
+  return parsed.data.cards;
+}
+
 // ---------- Anthropic (Claude) ----------
 
 async function identifyCardWithClaude(

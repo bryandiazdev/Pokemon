@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import type { NormalizedSet } from '@psr/providers';
 import { jsonOk, jsonError, jsonPaywall, withErrorHandling, parse } from '@/lib/api';
 import { getRegistry } from '@/lib/providers';
-import { matchSets } from '@/lib/catalog-match';
+import { isImageDataUrl, resolveSetExternalId, mapVisionLanguage } from '@/lib/scan-catalog';
 import {
   getEntitlementContext,
   checkQuickScan,
@@ -43,53 +42,6 @@ const bodySchema = z.object({
 });
 
 const CONFIDENCE_THRESHOLD = 0.75;
-
-const isImageDataUrl = (ref: string): boolean => /^data:image\/[a-z+.-]+;base64,/i.test(ref);
-
-// Set catalog cache for set-name resolution — sets change rarely.
-let setsCache: { at: number; sets: NormalizedSet[] } | null = null;
-const SETS_TTL_MS = 10 * 60_000;
-
-async function listSetsCached(): Promise<NormalizedSet[]> {
-  if (setsCache && Date.now() - setsCache.at < SETS_TTL_MS) return setsCache.sets;
-  const sets = await getRegistry().call('catalog', 'listSets', (a) => a.listSets({}));
-  setsCache = { at: Date.now(), sets };
-  return sets;
-}
-
-/**
- * Resolve the printed set to a catalog set id using the set name and/or the
- * printed total ("4/102" → 102). Returns undefined rather than guessing:
- * name matches are validated against the total when both are available.
- */
-async function resolveSetExternalId(
-  setName: string | null,
-  setTotal: string | null,
-): Promise<string | undefined> {
-  if (!setName && !setTotal) return undefined;
-  let sets: NormalizedSet[];
-  try {
-    sets = await listSetsCached();
-  } catch {
-    return undefined; // set scoping is an optimization, never a failure source
-  }
-  const total = setTotal ? parseInt(setTotal, 10) : NaN;
-
-  if (setName) {
-    const matches = matchSets(sets, setName);
-    if (matches.length === 0) return undefined;
-    if (!Number.isNaN(total)) {
-      const confirmed = matches.find((s) => s.printedTotal === total || s.total === total);
-      if (confirmed) return confirmed.externalId;
-    }
-    return matches[0]!.externalId;
-  }
-
-  // Total only: use it when it identifies exactly one set — otherwise it's
-  // ambiguous (many sets share a printed total) and we skip scoping.
-  const byTotal = sets.filter((s) => s.printedTotal === total || s.total === total);
-  return byTotal.length === 1 ? byTotal[0]!.externalId : undefined;
-}
 
 export const POST = withErrorHandling(async (req: Request) => {
   const json = await req.json().catch(() => ({}));
@@ -179,12 +131,7 @@ export const POST = withErrorHandling(async (req: Request) => {
         if (vision.name) ocr.name = vision.name;
         if (vision.number) ocr.number = vision.number;
         if (vision.setName) ocr.setName = vision.setName;
-        if (vision.language) {
-          // The vision model emits ISO 639-1; TCGdex uses dialect-scoped
-          // catalogs for Chinese and plain codes elsewhere.
-          const langMap: Record<string, string> = { zh: 'zh-cn', 'pt-br': 'pt' };
-          visionLanguage = langMap[vision.language] ?? vision.language;
-        }
+        if (vision.language) visionLanguage = mapVisionLanguage(vision.language);
         setTotal = vision.setTotal;
         identifiedBy = 'vision';
       }

@@ -275,6 +275,17 @@ export function checkCollectionAdd(ctx: EntitlementContext): GateResult {
   return { allowed: true, remaining: value - ctx.usage.collectionItems };
 }
 
+export function checkBatchScan(ctx: EntitlementContext): GateResult {
+  if (ctx.entitlements.batchScanningEnabled) return { allowed: true, remaining: null };
+  return denied('subscription_required', 'Batch scanning is a Pro feature.', {
+    plan: ctx.entitlements.plan,
+    metric: 'batch_scan',
+    used: 0,
+    limit: 0,
+    recommendedPlan: 'pro',
+  });
+}
+
 export function checkExport(ctx: EntitlementContext): GateResult {
   if (ctx.entitlements.exportsEnabled) return { allowed: true, remaining: null };
   return denied('subscription_required', 'Collection exports are available on Collector and Pro.', {
